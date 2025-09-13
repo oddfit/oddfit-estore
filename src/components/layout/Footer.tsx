@@ -28,7 +28,7 @@ const Footer: React.FC = () => {
                 <Instagram className="h-5 w-5" />
               </a>
               <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                <Youtube className="h-5 w-5" />
+                <Whatsapp className="h-5 w-5" />
               </a>
             </div>
           </div>
