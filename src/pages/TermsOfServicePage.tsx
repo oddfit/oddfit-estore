@@ -195,7 +195,7 @@ const TermsOfServicePage: React.FC = () => {
               <div className="bg-gray-50 rounded-lg p-4 mt-4">
                 <p><strong>Email:</strong> <a href="mailto:legal@oddfit.in" className="text-[#d25c4d] hover:underline">legal@oddfit.in</a></p>
                 <p><strong>Address:</strong> OddFit, Bengaluru, Karnataka, India</p>
-                <p><strong>Customer Support:</strong> <a href="/contact" className="text-[#d25c4d] hover:underline">Contact Form</a></p>
+                <p><strong>Customer Support:</strong> <a href="/contact" className=\"text-[#d25c4d] hover:underline">Contact Form</a></p>
               </div>
             </div>
           </section>
