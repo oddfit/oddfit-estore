@@ -90,7 +90,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             size="sm"
             fullWidth
             onClick={handleAddToCart}
-            className="bg-white text-gray-900 hover:bg-gray-100 border border-gray-200"
+            className="bg-[#d25c4d] text-white hover:bg-purple-600 border border-[#d25c4d]"
           >
             <ShoppingCart className="h-4 w-4 mr-2" />
             Quick Add
