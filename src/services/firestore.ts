@@ -30,15 +30,25 @@ export class FirestoreService {
   // Create a new document (uses server timestamps + scrubbing)
   async create(data: any) {
     try {
+      console.log(`Creating document in ${this.collectionName} with data:`, data);
       const clean = scrubUndefined(data);
+      console.log('Cleaned data:', clean);
+      
       const docRef = await addDoc(collection(db, this.collectionName), {
         ...clean,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      
+      console.log(`Document created successfully with ID: ${docRef.id}`);
       return docRef.id;
     } catch (error) {
-      console.error(`Error creating document in ${this.collectionName}:`, error);
+      console.error(`Error creating document in ${this.collectionName}:`, {
+        error,
+        code: (error as any)?.code,
+        message: (error as any)?.message,
+        details: (error as any)?.details
+      });
       throw error;
     }
   }

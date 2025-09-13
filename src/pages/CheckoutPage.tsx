@@ -114,37 +114,29 @@ const CheckoutPage: React.FC = () => {
         billingAddress: safeAddress,
         orderDate: new Date(),
         estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        createdAt: new Date(),
-        updatedAt: new Date(),
       };
 
-      // Add timeout wrapper for order creation
-      const createOrderWithTimeout = () => {
-        return new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error('Order creation timed out. Please try again.'));
-          }, 30000); // 30 second timeout
-
-          ordersService.create(orderData)
-            .then((result) => {
-              clearTimeout(timeout);
-              resolve(result);
-            })
-            .catch((error) => {
-              clearTimeout(timeout);
-              reject(error);
-            });
-        });
-      };
-
-      const orderId = await createOrderWithTimeout();
+      console.log('Creating order with data:', orderData);
+      const orderId = await ordersService.create(orderData);
+      console.log('Order created successfully with ID:', orderId);
 
       await clearCart();
       navigate(`/order-confirmation/${orderId}`);
     } catch (error) {
       console.error('Error placing order:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to place order. Please try again.';
-      alert(errorMessage);
+      
+      // More detailed error logging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          code: (error as any).code,
+          stack: error.stack
+        });
+        alert(`Failed to place order: ${error.message}`);
+      } else {
+        console.error('Unknown error:', error);
+        alert('Failed to place order. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
