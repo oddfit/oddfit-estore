@@ -53,11 +53,11 @@ const FAQPage: React.FC = () => {
       faqs: [
         {
           question: 'What is your return policy?',
-          answer: 'We offer a 30-day return policy from the delivery date. Items must be in original condition with tags attached, unworn and unwashed. Returns are free of charge.',
+          answer: 'We offer a 7-day return policy from the delivery date. Items must be in original condition with tags attached, unworn and unwashed. Returns are free of charge.',
         },
         {
           question: 'How do I return an item?',
-          answer: 'Contact our customer service team within 30 days of delivery. We\'ll provide you with return instructions and a prepaid return label. Pack the item securely and ship it back to us.',
+          answer: 'Contact our customer service team within 7 days of delivery. We\'ll provide you with return instructions and a prepaid return label. Pack the item securely and ship it back to us.',
         },
         {
           question: 'How long does it take to get my refund?',
