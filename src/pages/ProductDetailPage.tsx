@@ -16,6 +16,7 @@ import { productsService } from '../services/firestore';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import Button from '../components/ui/Button';
+import { toJsDate } from '../hooks/useCategories';
 
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -53,8 +54,8 @@ const ProductDetailPage: React.FC = () => {
             rating: productData.rating || 0,
             reviewCount: productData.reviewCount || 0,
             featured: productData.featured || false,
-            createdAt: productData.createdAt?.toDate() || new Date(),
-            updatedAt: productData.updatedAt?.toDate() || new Date(),
+            createdAt: toJsDate(productData.createdAt) || new Date(),
+            updatedAt: toJsDate(productData.updatedAt) || new Date(),
           };
 
           setProduct(transformedProduct);

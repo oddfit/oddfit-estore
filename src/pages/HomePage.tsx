@@ -9,6 +9,7 @@ import { productsService } from '../services/firestore';
 import { Sparkles } from "lucide-react";
 import { Ruler, Feather, Move, Receipt } from 'lucide-react';
 import { ReceiptText, IndianRupee } from 'lucide-react';
+import { toJsDate } from '../hooks/useCategories';
 
 const HomePage: React.FC = () => {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
@@ -41,8 +42,8 @@ const HomePage: React.FC = () => {
           rating: doc.rating || 0,
           reviewCount: doc.reviewCount || 0,
           featured: doc.featured || false,
-          createdAt: doc.createdAt?.toDate() || new Date(),
-          updatedAt: doc.updatedAt?.toDate() || new Date(),
+          createdAt: toJsDate(doc.createdAt) || new Date(),
+          updatedAt: toJsDate(doc.updatedAt) || new Date(),
         }));
         setFeaturedProducts(transformedProducts);
       } catch (error) {

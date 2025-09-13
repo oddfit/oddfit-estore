@@ -4,6 +4,7 @@ import { CheckCircle, Package, Truck, MapPin } from 'lucide-react';
 import { ordersService } from '../services/firestore';
 import { Order } from '../types';
 import Button from '../components/ui/Button';
+import { toJsDate } from '../hooks/useCategories';
 
 const OrderConfirmationPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -26,12 +27,12 @@ const OrderConfirmationPage: React.FC = () => {
             paymentMethod: orderData.paymentMethod,
             shippingAddress: orderData.shippingAddress,
             billingAddress: orderData.billingAddress,
-            orderDate: orderData.orderDate?.toDate() || new Date(),
-            estimatedDelivery: orderData.estimatedDelivery?.toDate(),
-            actualDelivery: orderData.actualDelivery?.toDate(),
+            orderDate: toJsDate(orderData.orderDate) || new Date(),
+            estimatedDelivery: orderData.estimatedDelivery ? toJsDate(orderData.estimatedDelivery) : undefined,
+            actualDelivery: orderData.actualDelivery ? toJsDate(orderData.actualDelivery) : undefined,
             trackingNumber: orderData.trackingNumber,
-            createdAt: orderData.createdAt?.toDate() || new Date(),
-            updatedAt: orderData.updatedAt?.toDate() || new Date(),
+            createdAt: toJsDate(orderData.createdAt) || new Date(),
+            updatedAt: toJsDate(orderData.updatedAt) || new Date(),
           });
         }
       } catch (error) {

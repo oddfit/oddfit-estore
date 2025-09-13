@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ordersService } from '../services/firestore';
 import { Order } from '../types';
 import Button from '../components/ui/Button';
+import { toJsDate } from '../hooks/useCategories';
 
 const OrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -31,12 +32,12 @@ const OrdersPage: React.FC = () => {
           paymentMethod: doc.paymentMethod,
           shippingAddress: doc.shippingAddress,
           billingAddress: doc.billingAddress,
-          orderDate: doc.orderDate?.toDate() || new Date(),
-          estimatedDelivery: doc.estimatedDelivery?.toDate(),
-          actualDelivery: doc.actualDelivery?.toDate(),
+          orderDate: toJsDate(doc.orderDate) || new Date(),
+          estimatedDelivery: doc.estimatedDelivery ? toJsDate(doc.estimatedDelivery) : undefined,
+          actualDelivery: doc.actualDelivery ? toJsDate(doc.actualDelivery) : undefined,
           trackingNumber: doc.trackingNumber,
-          createdAt: doc.createdAt?.toDate() || new Date(),
-          updatedAt: doc.updatedAt?.toDate() || new Date(),
+          createdAt: toJsDate(doc.createdAt) || new Date(),
+          updatedAt: toJsDate(doc.updatedAt) || new Date(),
         }));
         
         // Sort orders by creation date in JavaScript instead of Firestore

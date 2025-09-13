@@ -8,6 +8,7 @@ import ProductCard from '../components/ui/ProductCard';
 import Button from '../components/ui/Button';
 import { useCategories } from '../hooks/useCategories';
 import { productsService } from '../services/firestore';
+import { toJsDate } from '../hooks/useCategories';
 
 const ProductListPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -53,8 +54,8 @@ const ProductListPage: React.FC = () => {
           rating: doc.rating || 0,
           reviewCount: doc.reviewCount || 0,
           featured: doc.featured || false,
-          createdAt: doc.createdAt?.toDate() || new Date(),
-          updatedAt: doc.updatedAt?.toDate() || new Date(),
+          createdAt: toJsDate(doc.createdAt) || new Date(),
+          updatedAt: toJsDate(doc.updatedAt) || new Date(),
         }));
         
         console.log('Transformed products:', transformedProducts);
