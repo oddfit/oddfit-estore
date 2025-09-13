@@ -22,7 +22,7 @@ const Footer: React.FC = () => {
               Discover unique pieces that express your personality.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
+              <a href="https://www.facebook.com/oddfit.in/" className="text-gray-400 hover:text-white transition-colors">
                 <Facebook className="h-5 w-5" />
               </a>
               <a href="https://www.instagram.com/oddfit.in/" className="text-gray-400 hover:text-white transition-colors">
