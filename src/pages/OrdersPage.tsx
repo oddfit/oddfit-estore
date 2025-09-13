@@ -120,7 +120,7 @@ const OrdersPage: React.FC = () => {
                       Order #{order.id.slice(-8)}
                     </h3>
                     <p className="text-sm text-gray-600">
-                      Placed on {order.orderDate.toLocaleDateString()}
+                      Placed on {new Date(order.orderDate).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="flex items-center space-x-4">
@@ -160,7 +160,7 @@ const OrdersPage: React.FC = () => {
                         </p>
                         {order.estimatedDelivery && (
                           <p className="text-sm text-gray-600">
-                            Expected by {order.estimatedDelivery.toLocaleDateString()}
+                            Expected by {new Date(order.estimatedDelivery).toLocaleDateString()}
                           </p>
                         )}
                       </div>
