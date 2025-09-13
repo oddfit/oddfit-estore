@@ -252,7 +252,7 @@ const ProductListPage: React.FC = () => {
               </div>
 
               {/* Price Range */}
-              <div className="mb-6">
+              {/* <div className="mb-6">
                 <h4 className="font-medium mb-3">Price</h4>
                 <div className="space-y-2">
                   {PRICE_RANGES.map((range, index) => (
@@ -271,7 +271,7 @@ const ProductListPage: React.FC = () => {
                     </label>
                   ))}
                 </div>
-              </div>
+              </div> */}
 
               {/* Sizes */}
               <div className="mb-6">
@@ -297,7 +297,7 @@ const ProductListPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Colors */}
+              {/* Colors
               <div className="mb-6">
                 <h4 className="font-medium mb-3">Color</h4>
                 <div className="grid grid-cols-4 gap-3">
@@ -327,7 +327,7 @@ const ProductListPage: React.FC = () => {
                     </label>
                   ))}
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
 

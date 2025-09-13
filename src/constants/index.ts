@@ -15,16 +15,16 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 export const SIZES = ['S+', 'M+', 'L+', 'XL+']; //'XS+', , 'XXL'
 
 // Product colors
-export const COLORS_OPTIONS = [
-  { name: 'Black', value: '#000000' },
-  { name: 'White', value: '#ffffff' },
-  { name: 'Gray', value: '#6b7280' },
-  { name: 'Red', value: '#dc2626' },
-  { name: 'Blue', value: '#2563eb' },
-  { name: 'Green', value: '#059669' },
-  { name: 'Yellow', value: '#d97706' },
-  { name: 'Purple', value: '#7c3aed' },
-];
+// export const COLORS_OPTIONS = [
+//   { name: 'Black', value: '#000000' },
+//   { name: 'White', value: '#ffffff' },
+//   { name: 'Gray', value: '#6b7280' },
+//   { name: 'Red', value: '#dc2626' },
+//   { name: 'Blue', value: '#2563eb' },
+//   { name: 'Green', value: '#059669' },
+//   { name: 'Yellow', value: '#d97706' },
+//   { name: 'Purple', value: '#7c3aed' },
+// ];
 
 // Order status options
 export const ORDER_STATUS = {
@@ -38,10 +38,10 @@ export const ORDER_STATUS = {
 };
 
 // Price ranges for filtering
-export const PRICE_RANGES = [
-  { label: 'Under ₹2,000', min: 0, max: 2000 },
-  { label: '₹2,000 - ₹5,000', min: 2000, max: 5000 },
-  { label: '₹5,000 - ₹10,000', min: 5000, max: 10000 },
-  { label: '₹10,000 - ₹20,000', min: 10000, max: 20000 },
-  { label: 'Over ₹20,000', min: 20000, max: Infinity },
-];
+// export const PRICE_RANGES = [
+//   { label: 'Under ₹2,000', min: 0, max: 2000 },
+//   { label: '₹2,000 - ₹5,000', min: 2000, max: 5000 },
+//   { label: '₹5,000 - ₹10,000', min: 5000, max: 10000 },
+//   { label: '₹10,000 - ₹20,000', min: 10000, max: 20000 },
+//   { label: 'Over ₹20,000', min: 20000, max: Infinity },
+// ];
