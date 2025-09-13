@@ -78,12 +78,12 @@ const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/shipping" className="text-gray-300 hover:text-white transition-colors">
+                <Link to="/shipping-info" className="text-gray-300 hover:text-white transition-colors">
                   Shipping Info
                 </Link>
               </li>
               <li>
-                <Link to="/returns" className="text-gray-300 hover:text-white transition-colors">
+                <Link to="/returns-exchanges" className="text-gray-300 hover:text-white transition-colors">
                   Returns & Exchanges
                 </Link>
               </li>
@@ -108,10 +108,6 @@ const Footer: React.FC = () => {
               <Mail className="h-5 w-5 text-gray-400 mr-3" />
               <span className="text-gray-300">support@oddfit.in</span>
             </div>
-            {/* <div className="flex items-center">
-              <Phone className="h-5 w-5 text-gray-400 mr-3" />
-              <span className="text-gray-300">+91 98765 43210</span>
-            </div> */}
             <div className="flex items-center">
               <MapPin className="h-5 w-5 text-gray-400 mr-3" />
               <span className="text-gray-300">Bengaluru, India</span>
@@ -130,9 +126,6 @@ const Footer: React.FC = () => {
             </Link>
             <Link to="/terms" className="text-gray-400 hover:text-white text-sm transition-colors">
               Terms of Service
-            </Link>
-            <Link to="/cookies" className="text-gray-400 hover:text-white text-sm transition-colors">
-              Cookie Policy
             </Link>
           </div>
         </div>

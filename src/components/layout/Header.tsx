@@ -49,13 +49,12 @@ const Header: React.FC<HeaderProps> = ({ cartItemCount = 0, onMobileMenuToggle }
           </div>
 
           {/* Desktop/Tablet nav ONLY (hidden on mobile) */}
-          {/* <nav className="hidden md:flex flex-1 min-w-0 items-center justify-center gap-4 lg:gap-8 font-semibold text-[#d25c4d]">
-            <Link to="/categories" className="hover:text-purple-900 whitespace-nowrap text-sm lg:text-base">About Us</Link>
+          <nav className="hidden md:flex flex-1 min-w-0 items-center justify-center gap-4 lg:gap-8 font-semibold text-[#d25c4d]">
+            <Link to="/about" className="hover:text-purple-900 whitespace-nowrap text-sm lg:text-base">About Us</Link>
             <Link to="/products" className="hover:text-purple-900 whitespace-nowrap text-sm lg:text-base">Shop Now</Link>
-            <Link to="/categories" className="hover:text-purple-900 whitespace-nowrap text-sm lg:text-base">Browse Categories</Link>
-            <Link to="/size_guide" className="hover:text-purple-900 whitespace-nowrap text-sm lg:text-base">Size Guide</Link>
+            <Link to="/size-guide" className="hover:text-purple-900 whitespace-nowrap text-sm lg:text-base">Size Guide</Link>
             <Link to="/contact" className="hover:text-purple-900 whitespace-nowrap text-sm lg:text-base">Contact Us</Link>
-          </nav> */}
+          </nav>
 
           {/* Search Bar */}
           <div className="flex-1 max-w-lg mx-4 hidden md:block">
@@ -65,9 +64,6 @@ const Header: React.FC<HeaderProps> = ({ cartItemCount = 0, onMobileMenuToggle }
           {/* Right-side icons / actions */}
           <div className="flex items-center space-x-2">
             {/* Mobile Search (mobile only) */}
-            {/* <button className="md:hidden p-2 text-[#d25c4d] hover:text-gray-900" aria-label="Search">
-              <Search className="h-5 w-5" />
-            </button> */}
 
             {/* Wishlist */}
             <Link

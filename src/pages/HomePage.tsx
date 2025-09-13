@@ -7,7 +7,6 @@ import Button from '../components/ui/Button';
 import { useCategories } from '../hooks/useCategories';
 import { productsService } from '../services/firestore';
 import { Sparkles } from "lucide-react";
-{/* Reasons to Love Us */}
 import { Ruler, Feather, Move, Receipt } from 'lucide-react';
 import { ReceiptText, IndianRupee } from 'lucide-react';
 
@@ -86,32 +85,6 @@ const ReceiptINR = ({ className = 'h-7 w-7 text-[#d25c4d]' }) => (
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
-      {/* <section className="relative bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-        <div className="absolute inset-0 bg-black opacity-20"></div>
-        <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-              Rewriting the Style guide
-            </h1>
-            <p className="mt-6 text-xl leading-8 text-blue-100">
-              Find the perfect clothing pieces that express your unique personality
-            </p>
-            <div className="mt-10 flex items-center justify-center gap-4">
-              <Link to="/products">
-                <Button size="lg" variant="secondary">
-                  Shop Now
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </Link>
-              <Link to="/categories">
-                <Button size="lg" variant="outline" className="bg-white/10 border-white/30 text-white hover:bg-white/20 focus:ring-white/50">
-                  Browse Categories
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section> */}
       <section className="relative">
         <div
           className="
@@ -125,14 +98,13 @@ const ReceiptINR = ({ className = 'h-7 w-7 text-[#d25c4d]' }) => (
           aria-label="OddFit hero"
           role="img"
         />
-      </section>      {/* Categories Section */}
+      </section>
+      
+      {/* Categories Section */}
       <section className="py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900">Shop by Collection</h2>
-            {/* <p className="mt-4 text-lg text-gray-600">
-              Explore our curated collections for every style and occasion
-            </p> */}
           </div>
           
           {categoriesLoading ? (
@@ -212,30 +184,7 @@ const ReceiptINR = ({ className = 'h-7 w-7 text-[#d25c4d]' }) => (
           )}
         </div>
       </section>
-      {/* Stats Section */}
-      {/* <section className="py-16 bg-gray-900 text-white">
-        <div className="text-center text-3xl font-bold text-[#d25c4d] -mt-10 mb-4"> Reasons to Love us </div>
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
-            <div className="text-center">
-              <div className="text-3xl font-bold">10K+</div>
-              <div className="text-sm text-gray-400 mt-2">Happy Customers</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold">5K+</div>
-              <div className="text-sm text-gray-400 mt-2">Products</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold">99%</div>
-              <div className="text-sm text-gray-400 mt-2">Satisfaction Rate</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold">24/7</div>
-              <div className="text-sm text-gray-400 mt-2">Customer Support</div>
-            </div>
-          </div>
-        </div>
-      </section> */}
+      {/* Reasons to Love Us Section */}
       <section className="py-12 sm:py-16 bg-black">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h3 className="text-center text-2xl text-[#d25c4d] sm:text-3xl font-semibold text-white-900">
@@ -261,7 +210,6 @@ const ReceiptINR = ({ className = 'h-7 w-7 text-[#d25c4d]' }) => (
       <section className="py-16 bg-grey-600">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
           <Sparkles className="mx-auto h-12 w-12 text-purple-600 mb-6" />
-          {/* <TrendingUp className="mx-auto h-12 w-12 text-purple-200 mb-6" /> */}
           <h2 className="text-3xl font-bold text-[#d25c4d] mb-4">
             Stay Updated with Latest Trends
           </h2>
@@ -274,9 +222,6 @@ const ReceiptINR = ({ className = 'h-7 w-7 text-[#d25c4d]' }) => (
               placeholder="Enter your email"
               className="min-w-0 basis-[65%] sm:basis-auto sm:flex-1 rounded-lg border-0 text-gray-900 focus:ring-2 focus:ring-purple-300"
             />
-            {/* <Button variant="primary" size="lg">
-              Subscribe
-            </Button> */}
             <Button
               size="lg"
               variant="brand"
@@ -291,5 +236,3 @@ const ReceiptINR = ({ className = 'h-7 w-7 text-[#d25c4d]' }) => (
 };
 
 export default HomePage;
-
-// gs://oddfit-2cce7.firebasestorage.app/assets/banner/banner_desktop.png

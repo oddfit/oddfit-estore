@@ -17,6 +17,14 @@ import OrdersPage from './pages/OrdersPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import WishlistPage from './pages/WishlistPage';
+import ContactPage from './pages/ContactPage';
+import AboutPage from './pages/AboutPage';
+import SizeGuidePage from './pages/SizeGuidePage';
+import ShippingInfoPage from './pages/ShippingInfoPage';
+import ReturnsExchangesPage from './pages/ReturnsExchangesPage';
+import FAQPage from './pages/FAQPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
 import { useCart } from './contexts/CartContext';
 
 const AppContent: React.FC = () => {
@@ -47,6 +55,14 @@ const AppContent: React.FC = () => {
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/size-guide" element={<SizeGuidePage />} />
+          <Route path="/shipping-info" element={<ShippingInfoPage />} />
+          <Route path="/returns-exchanges" element={<ReturnsExchangesPage />} />
+          <Route path="/faq" element={<FAQPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsOfServicePage />} />
         </Routes>
       </main>
       
