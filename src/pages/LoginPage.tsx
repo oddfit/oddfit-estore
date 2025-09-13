@@ -295,7 +295,7 @@ const LoginPage: React.FC = () => {
                 size="lg"
                 loading={loading}
                 disabled={loading || otp.length !== 6}
-                className="h-14 text-base font-semibold rounded-2xl"
+                className="h-14 text-base font-semibold rounded-2xl shadow-lg hover:shadow-xl transition-all"
               >
                 {loading ? 'Verifying...' : 'Sign In'}
               </Button>

@@ -363,7 +363,7 @@ const RegisterPage: React.FC = () => {
               size="lg"
               loading={loading}
               disabled={loading || !formData.name.trim() || formData.phoneNumber.length !== 10}
-              className="h-14 text-base font-semibold rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg hover:shadow-xl transition-all"
+              className="h-14 text-base font-semibold rounded-2xl shadow-lg hover:shadow-xl transition-all"
             >
               {loading ? 'Sending OTP...' : 'Send OTP'}
             </Button>
