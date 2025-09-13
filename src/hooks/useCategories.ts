@@ -13,7 +13,7 @@ type FirestoreCategory = {
   launched?: boolean;
 };
 
-const toJsDate = (d: FirestoreDate) =>
+export const toJsDate = (d: FirestoreDate) =>
   (d && typeof (d as any).toDate === 'function') ? (d as any).toDate() as Date : (d as Date) ?? new Date();
 
 export const useCategories = () => {
