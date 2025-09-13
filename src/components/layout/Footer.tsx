@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, Whatsapp, MessageCircle } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, FaWhatsapp, MessageCircle } from 'lucide-react';
 
 const Footer: React.FC = () => {
   return (
@@ -28,7 +28,7 @@ const Footer: React.FC = () => {
                 <Instagram className="h-5 w-5" />
               </a>
               <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                <Whatsapp className="h-5 w-5" />
+                <FaWhatsapp className="h-5 w-5" />
               </a>
             </div>
           </div>
