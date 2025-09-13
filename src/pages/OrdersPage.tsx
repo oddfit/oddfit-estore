@@ -17,10 +17,9 @@ const OrdersPage: React.FC = () => {
       
       try {
         setLoading(true);
+        // Get all orders for the user without ordering to avoid composite index requirement
         const ordersData = await ordersService.query(
-          [{ field: 'userId', operator: '==', value: currentUser.uid }],
-          'createdAt',
-          'desc'
+          [{ field: 'userId', operator: '==', value: currentUser.uid }]
         );
         
         const transformedOrders = ordersData.map((doc: any) => ({
@@ -39,6 +38,9 @@ const OrdersPage: React.FC = () => {
           createdAt: doc.createdAt?.toDate() || new Date(),
           updatedAt: doc.updatedAt?.toDate() || new Date(),
         }));
+        
+        // Sort orders by creation date in JavaScript instead of Firestore
+        transformedOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         
         setOrders(transformedOrders);
       } catch (error) {
