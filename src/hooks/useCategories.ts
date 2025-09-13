@@ -13,8 +13,31 @@ type FirestoreCategory = {
   launched?: boolean;
 };
 
-export const toJsDate = (d: FirestoreDate) =>
-  (d && typeof (d as any).toDate === 'function') ? (d as any).toDate() as Date : (d as Date) ?? new Date();
+export const toJsDate = (d: any): Date => {
+  if (!d) return new Date();
+  
+  // If it's already a Date object
+  if (d instanceof Date) return d;
+  
+  // If it's a Firestore Timestamp with toDate method
+  if (d && typeof d.toDate === 'function') {
+    try {
+      return d.toDate();
+    } catch (error) {
+      console.warn('Error converting Firestore timestamp:', error);
+      return new Date();
+    }
+  }
+  
+  // If it's a string or number that can be converted to Date
+  if (typeof d === 'string' || typeof d === 'number') {
+    const date = new Date(d);
+    return isNaN(date.getTime()) ? new Date() : date;
+  }
+  
+  // Fallback to current date
+  return new Date();
+};
 
 export const useCategories = () => {
   const [categories, setCategories] = useState<Category[]>([]);

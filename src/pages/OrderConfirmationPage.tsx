@@ -84,7 +84,7 @@ const OrderConfirmationPage: React.FC = () => {
             <h2 className="text-lg font-medium text-gray-900">Order Details</h2>
             <p className="text-sm text-gray-600">Order #{order.id}</p>
             <p className="text-sm text-gray-600">
-              Placed on {order.orderDate.toLocaleDateString()}
+              Placed on {new Date(order.orderDate).toLocaleDateString()}
             </p>
           </div>
 
@@ -156,7 +156,7 @@ const OrderConfirmationPage: React.FC = () => {
             {order.estimatedDelivery && (
               <p>
                 <span className="font-medium">Estimated Delivery:</span>{' '}
-                {order.estimatedDelivery.toLocaleDateString()}
+                {new Date(order.estimatedDelivery).toLocaleDateString()}
               </p>
             )}
             {order.trackingNumber && (
