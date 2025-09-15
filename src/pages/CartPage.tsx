@@ -135,16 +135,16 @@ const CartPage: React.FC = () => {
                   <p className="text-sm font-medium text-gray-900">₹99.00</p>
                 </div>
 
-                <div className="flex items-center justify-between">
+                {/* <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-600">Tax</p>
                   <p className="text-sm font-medium text-gray-900">₹{(cartTotal * 0.18).toFixed(2)}</p>
-                </div>
+                </div> */}
 
                 <div className="border-t border-gray-200 pt-4">
                   <div className="flex items-center justify-between">
                     <p className="text-base font-medium text-gray-900">Order total</p>
                     <p className="text-base font-medium text-gray-900">
-                      ₹{(cartTotal + 99 + cartTotal * 0.18).toFixed(2)}
+                      ₹{(cartTotal + 99 ).toFixed(2)}
                     </p>
                   </div>
                 </div>

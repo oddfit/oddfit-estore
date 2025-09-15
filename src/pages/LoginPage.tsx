@@ -1,16 +1,13 @@
-// src/pages/LoginPage.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Phone, LogIn, Shield, RefreshCcw } from 'lucide-react';
-import { RecaptchaVerifier, ConfirmationResult } from 'firebase/auth';
+import { LogIn, Shield, RefreshCcw } from 'lucide-react';
+import type { RecaptchaVerifier, ConfirmationResult } from 'firebase/auth';
 import { useAuth } from '../contexts/AuthContext';
-import { auth } from '../services/firebase';
 import Button from '../components/ui/Button';
-import { useCart } from '../contexts/CartContext';
+import { initRecaptcha, resetRecaptcha, destroyRecaptcha } from '../components/util/recaptcha';
 
 type Step = 'form' | 'otp';
 
-const STASH_KEY = 'merge_cart';
 const RECAPTCHA_ID = 'recaptcha-container-login';
 
 const LoginPage: React.FC = () => {
@@ -19,20 +16,18 @@ const LoginPage: React.FC = () => {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [recaptchaMode, setRecaptchaMode] = useState<'invisible' | 'normal'>('invisible');
+  const [captchaReady, setCaptchaReady] = useState(false);
 
   const [recaptchaVerifier, setRecaptchaVerifier] = useState<RecaptchaVerifier | null>(null);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
 
-  const initTriedRef = useRef(false);
   const { sendOTP, verifyOTP } = useAuth();
-  const { cart } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
   // Helpers
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 10);
     setPhoneNumber(value);
@@ -44,108 +39,48 @@ const LoginPage: React.FC = () => {
     return redirect && redirect.startsWith('/') ? redirect : '/checkout';
   };
 
-  const withTimeout = <T,>(p: Promise<T>, ms: number, message: string): Promise<T> =>
-    new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error(message)), ms);
-      p.then(
-        (v) => { clearTimeout(t); resolve(v); },
-        (e) => { clearTimeout(t); reject(e); }
-      );
-    });
-
-  /** Clear any existing recaptcha instance & DOM */
-  const clearRecaptcha = () => {
-    try {
-      if (recaptchaVerifier && (recaptchaVerifier as any).clear) {
-        (recaptchaVerifier as any).clear();
-      }
-    } catch {}
-    setRecaptchaVerifier(null);
-    initTriedRef.current = false;
-
-    // Clear container contents to be safe
-    const container = document.getElementById(RECAPTCHA_ID);
-    if (container) container.innerHTML = '';
-  };
-
-  /** Initialize reCAPTCHA in a given mode; falls back to "normal" if "invisible" fails */
-  const initRecaptcha = async (mode: 'invisible' | 'normal') => {
-    if (initTriedRef.current) return;
-    initTriedRef.current = true;
-
-    const container = document.getElementById(RECAPTCHA_ID);
-    if (!container) {
-      requestAnimationFrame(() => { initTriedRef.current = false; initRecaptcha(mode); });
-      return;
-    }
-
-    setError('');
-    setRecaptchaMode(mode);
-
-    try {
-      const verifier = new RecaptchaVerifier(auth, RECAPTCHA_ID, {
-        size: mode, // 'invisible' first, then 'normal' if needed
-        callback: () => setError(''),
-        'expired-callback': () => setError('Security verification expired. Please try again.'),
-      });
-
-      await withTimeout(verifier.render(), 15000, 'Security check failed to load in time.');
-      setRecaptchaVerifier(verifier);
-    } catch (err: any) {
-      console.error('reCAPTCHA render/init error:', err);
-      // Fallback: try visible widget if invisible fails
-      if (mode === 'invisible') {
-        clearRecaptcha();
-        setError('Security check blocked; switching to visible verification…');
-        // Give DOM a tick to clear then try visible
-        setTimeout(() => initRecaptcha('normal'), 50);
-      } else {
-        setError('Security verification failed to load. Please refresh and try again.');
-      }
-    }
-  };
-
-  /** Manual reload button */
-  const handleReloadCaptcha = () => {
-    clearRecaptcha();
-    initRecaptcha('invisible');
-  };
-
-  // Init reCAPTCHA when FORM step is showing
+  // Initialize a SINGLE visible reCAPTCHA
   useEffect(() => {
-    if (step === 'form') {
-      initRecaptcha('invisible');
-    } else {
-      clearRecaptcha();
+    let alive = true;
+
+    async function boot() {
+      if (step !== 'form') return;
+      setCaptchaReady(false);
+      setError('');
+
+      try {
+        const verifier = await initRecaptcha(
+          RECAPTCHA_ID,
+          'normal',
+          () => setError('Security verification expired. Please try again.')
+        );
+        if (!alive) return;
+        setRecaptchaVerifier(verifier);
+        setCaptchaReady(true);
+      } catch (e) {
+        console.error('reCAPTCHA init error:', e);
+        if (!alive) return;
+        setError('Security verification failed to load. Please reload the verification and try again.');
+        setCaptchaReady(false);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    boot();
+    return () => {
+      alive = false;
+      destroyRecaptcha();
+      setRecaptchaVerifier(null);
+      setCaptchaReady(false);
+    };
   }, [step]);
 
-  // Cleanup on unmount
-  useEffect(() => clearRecaptcha, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /** Stash the current (guest) cart in localStorage before we switch auth users */
-  const stashGuestCart = () => {
-    try {
-      const guestUid = auth.currentUser?.uid || null;
-      const safeItems = (cart?.items || []).map((item) => ({
-        productId: item.productId,
-        size: item.size,
-        color: item.color,
-        quantity: Number(item.quantity || 0),
-        price: Number(item.price || 0),
-        name: item.product?.name || '',
-        image: item.product?.images?.[0] || null,
-      }));
-      localStorage.setItem(STASH_KEY, JSON.stringify({ uid: guestUid, items: safeItems }));
-    } catch (e) {
-      console.log('Failed to stash guest cart (safe to ignore):', e);
-    }
+  const reloadRecaptcha = () => {
+    resetRecaptcha(); // no re-create → no duplicates
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
   // Handlers
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -153,10 +88,8 @@ const LoginPage: React.FC = () => {
       setError('Please enter a valid 10-digit phone number');
       return;
     }
-    if (!recaptchaVerifier) {
-      setError('Please wait for security verification to load');
-      // try to init again immediately
-      initRecaptcha('invisible');
+    if (!recaptchaVerifier || !captchaReady) {
+      setError('Please wait for the security verification to load.');
       return;
     }
 
@@ -164,54 +97,17 @@ const LoginPage: React.FC = () => {
       setError('');
       setLoading(true);
 
-      // Stash the guest cart BEFORE auth flow changes the user
-      stashGuestCart();
+      // For "normal" size, verify() ensures the challenge is solved and returns a token
+      await recaptchaVerifier.verify();
 
-      // Force verification (invisible triggers challenge automatically)
-      try {
-        await withTimeout(
-          recaptchaVerifier.verify(),
-          20000,
-          'Security check timed out. Please try again.'
-        );
-      } catch (verifyErr) {
-        // If invisible verify failed due to block, try visible widget once
-        if (recaptchaMode === 'invisible') {
-          clearRecaptcha();
-          setError('Security check needed. Showing the verification widget…');
-          await new Promise((r) => setTimeout(r, 50));
-          await initRecaptcha('normal');
-          if (!recaptchaVerifier) throw verifyErr;
-          await withTimeout(
-            recaptchaVerifier.verify(),
-            20000,
-            'Security check timed out. Please try again.'
-          );
-        } else {
-          throw verifyErr;
-        }
-      }
-
-      // Send OTP after a successful token
-      const result = await withTimeout(
-        sendOTP(phoneNumber, recaptchaVerifier),
-        20000,
-        'Network seems slow. Please try again.'
-      );
-
+      const result = await sendOTP(phoneNumber, recaptchaVerifier);
       setConfirmationResult(result);
       setStep('otp');
     } catch (err: any) {
       console.error('Send OTP error:', err);
-      const msg =
-        err?.code === 'auth/network-request-failed'
-          ? 'Network error while contacting the server. Check your connection or disable any ad/privacy blockers that might block Google reCAPTCHA.'
-          : err?.message || 'Failed to send OTP. Please try again.';
-      setError(msg);
-
-      // Give the user a fresh widget after an error
-      clearRecaptcha();
-      setTimeout(() => initRecaptcha('invisible'), 100);
+      setError(err?.message || 'Failed to send OTP. Please try again.');
+      // A simple reset (not destroy) is enough for the checkbox widget
+      resetRecaptcha();
     } finally {
       setLoading(false);
     }
@@ -235,7 +131,7 @@ const LoginPage: React.FC = () => {
       await verifyOTP(confirmationResult, otp);
       navigate(safeRedirectFromQuery(), { replace: true });
     } catch (err: any) {
-      setError(err.message || 'Invalid OTP. Please try again.');
+      setError(err?.message || 'Invalid OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -250,9 +146,9 @@ const LoginPage: React.FC = () => {
 
   const registerHref = `/register?redirect=${encodeURIComponent(safeRedirectFromQuery())}`;
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
   // Render
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
   if (step === 'otp') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center p-4">
@@ -340,7 +236,6 @@ const LoginPage: React.FC = () => {
                 Phone Number
               </label>
               <div className="relative">
-                <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <div className="flex">
                   <span className="inline-flex items-center px-4 rounded-l-2xl border border-r-0 border-gray-200 bg-gray-100 text-gray-700 text-base font-semibold">
                     +91
@@ -359,16 +254,14 @@ const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* reCAPTCHA container */}
+            {/* reCAPTCHA (visible) */}
             <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
               <div className="flex items-center mb-3">
                 <Shield className="h-5 w-5 text-gray-600 mr-2" />
-                <span className="text-sm font-medium text-gray-700">
-                  Security Verification {recaptchaMode === 'normal' ? '(visible)' : '(auto)'}
-                </span>
+                <span className="text-sm font-medium text-gray-700">Security Verification</span>
                 <button
                   type="button"
-                  onClick={handleReloadCaptcha}
+                  onClick={reloadRecaptcha}
                   className="ml-auto inline-flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900"
                   title="Reload verification"
                 >
@@ -376,6 +269,9 @@ const LoginPage: React.FC = () => {
                 </button>
               </div>
               <div id={RECAPTCHA_ID} />
+              {!captchaReady && (
+                <p className="mt-2 text-xs text-gray-500">Loading verification…</p>
+              )}
             </div>
 
             <Button
@@ -383,7 +279,7 @@ const LoginPage: React.FC = () => {
               fullWidth
               size="lg"
               loading={loading}
-              disabled={loading || phoneNumber.length !== 10}
+              disabled={loading || phoneNumber.length !== 10 || !captchaReady}
               className="h-14 text-base font-semibold rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg hover:shadow-xl transition-all"
             >
               {loading ? 'Sending OTP...' : 'Send OTP'}
@@ -394,7 +290,10 @@ const LoginPage: React.FC = () => {
         <div className="mt-8 text-center">
           <p className="text-gray-600">
             Don't have an account?{' '}
-            <Link to={registerHref} className="text-purple-600 hover:text-purple-700 font-bold transition-colors">
+            <Link
+              to={`/register?redirect=${encodeURIComponent(safeRedirectFromQuery())}`}
+              className="text-purple-600 hover:text-purple-700 font-bold transition-colors"
+            >
               Create Account
             </Link>
           </p>

@@ -280,7 +280,7 @@ const ProductDetailPage: React.FC = () => {
                 </div>
                 <div className="flex items-center">
                   <RotateCcw className="h-5 w-5 text-blue-600 mr-3" />
-                  <span className="text-sm text-gray-700">30-day return policy</span>
+                  <span className="text-sm text-gray-700">7-day return policy</span>
                 </div>
                 <div className="flex items-center">
                   <Shield className="h-5 w-5 text-purple-600 mr-3" />

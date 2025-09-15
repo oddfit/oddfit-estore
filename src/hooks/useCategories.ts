@@ -1,45 +1,38 @@
-import { useState, useEffect } from 'react';
-import { Category } from '../types';
-import { categoriesService } from '../services/firestore';
-import { FirebaseError } from 'firebase/app';
+// src/hooks/useCategories.ts
+import { useEffect, useMemo, useState } from 'react';
+import { collection, getDocs, DocumentData } from 'firebase/firestore';
+import { db } from '../services/firebase';
 
-type FirestoreDate = Date | { toDate: () => Date } | undefined;
-type FirestoreCategory = {
+export type Category = {
   id: string;
   name: string;
-  image_url?: string;
-  createdAt?: FirestoreDate;
-  updatedAt?: FirestoreDate;
+  image: string;       // normalized single image URL your UI expects
+  sizes: string[];     // array of size labels
+  launched?: boolean;  // optional flag
+  createdAt?: Date;
+  updatedAt?: Date;
+};
+
+// Helper you used elsewhere
+export const toJsDate = (val: any): Date | undefined => {
+  if (!val) return undefined;
+  if (typeof val?.toDate === 'function') return val.toDate();
+  if (val instanceof Date) return val;
+  return undefined;
+};
+
+type RawCategory = DocumentData & {
+  name?: string;
+  image_url?: string | null;
+  sizes?: string[] | null;
   launched?: boolean;
+  createdAt?: any;
+  updatedAt?: any;
 };
 
-export const toJsDate = (d: any): Date => {
-  if (!d) return new Date();
-  
-  // If it's already a Date object
-  if (d instanceof Date) return d;
-  
-  // If it's a Firestore Timestamp with toDate method
-  if (d && typeof d.toDate === 'function') {
-    try {
-      return d.toDate();
-    } catch (error) {
-      console.warn('Error converting Firestore timestamp:', error);
-      return new Date();
-    }
-  }
-  
-  // If it's a string or number that can be converted to Date
-  if (typeof d === 'string' || typeof d === 'number') {
-    const date = new Date(d);
-    return isNaN(date.getTime()) ? new Date() : date;
-  }
-  
-  // Fallback to current date
-  return new Date();
-};
+export function useCategories(opts?: { onlyLaunched?: boolean }) {
+  const onlyLaunched = opts?.onlyLaunched ?? true;
 
-export const useCategories = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,42 +41,66 @@ export const useCategories = () => {
     let alive = true;
 
     (async () => {
+      setLoading(true);
+      setError(null);
+
       try {
-        setLoading(true);
+        // Single fetch, no where/orderBy to avoid index issues
+        const snap = await getDocs(collection(db, 'categories'));
 
-        // If your service supports it, prefer: await categoriesService.getAll({ launched: true })
-        const all = (await categoriesService.getAll()) as FirestoreCategory[];
+        const all = snap.docs.map((d) => {
+          const data = (d.data() || {}) as RawCategory;
 
-        const transformed: Category[] = all
-          .filter(doc => doc?.launched === true)
-          .map(doc => ({
-            id: doc.id,
-            name: doc.name,
-            image: doc.image_url ?? '',
-            createdAt: toJsDate(doc.createdAt),
-            updatedAt: toJsDate(doc.updatedAt),
-          }));
+          // Normalize an image URL for the UI
+          const normalizedImage =
+            (typeof data.image_url === 'string' && data.image_url) ||
+            '';
 
-        if (alive) {
-          setCategories(transformed);
-          setError(null);
+          return {
+            id: d.id,
+            name: data.name ?? '',
+            image: normalizedImage,
+            sizes: Array.isArray(data.sizes) ? data.sizes : [],
+            launched: data.launched === true,
+            createdAt: toJsDate(data.createdAt),
+            updatedAt: toJsDate(data.updatedAt),
+          } as Category;
+        });
+
+        // Filter by launched on the client
+        let filtered = onlyLaunched ? all.filter((c) => c.launched) : all;
+
+        // If nothing matched and we do have categories, fall back so UI isn’t empty
+        if (onlyLaunched && filtered.length === 0 && all.length > 0) {
+          console.warn(
+            '[useCategories] No categories with launched=true. Falling back to showing all.'
+          );
+          filtered = all;
         }
-      } catch (err) {
-        console.error('Error fetching categories:', err);
-        const code = (err as FirebaseError)?.code ?? (err as any)?.code;
-        if (alive) {
-          setError(code === 'permission-denied'
-            ? 'Categories unavailable - please check Firebase permissions'
-            : 'Failed to load categories');
-          setCategories([]);
-        }
+
+        // Sort by name
+        filtered.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+        if (alive) setCategories(filtered);
+      } catch (e: any) {
+        console.error('useCategories error:', e);
+        if (alive) setError(e?.message || 'Failed to load categories.');
+        if (alive) setCategories([]); // keep it safe
       } finally {
         if (alive) setLoading(false);
       }
     })();
 
-    return () => { alive = false; };
-  }, []);
+    return () => {
+      alive = false;
+    };
+  }, [onlyLaunched]);
 
-  return { categories, loading, error };
-};
+  // In case you want memoized values (optional)
+  const value = useMemo(
+    () => ({ categories, loading, error }),
+    [categories, loading, error]
+  );
+
+  return value;
+}

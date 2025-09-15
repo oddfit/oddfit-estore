@@ -101,8 +101,8 @@ const CheckoutPage: React.FC = () => {
 
       const subtotal = cartTotal;
       const shipping = 99;
-      const tax = cartTotal * 0;
-      const total = subtotal + shipping + tax;
+      // const tax = cartTotal * 0;
+      const total = subtotal + shipping; // + tax;
 
       const orderData = {
         userId: currentUser.uid,
@@ -144,8 +144,8 @@ const CheckoutPage: React.FC = () => {
 
   const subtotal = cartTotal;
   const shipping = 99;
-  const tax = cartTotal * 0.18;
-  const total = subtotal + shipping + tax;
+  // const tax = cartTotal * 0.18;
+  const total = subtotal + shipping; //+ tax;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -305,10 +305,10 @@ const CheckoutPage: React.FC = () => {
                   <span>Shipping</span>
                   <span>₹{shipping.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
+                {/* <div className="flex justify-between text-sm">
                   <span>Tax (18%)</span>
                   <span>₹{tax.toFixed(2)}</span>
-                </div>
+                </div> */}
                 <div className="flex justify-between text-base font-medium border-t pt-2">
                   <span>Total</span>
                   <span>₹{total.toFixed(2)}</span>

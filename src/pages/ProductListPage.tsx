@@ -40,13 +40,18 @@ const ProductListPage: React.FC = () => {
         console.log('Raw products data:', productsData);
         console.log('Number of products fetched:', productsData.length);
         
+        const toImages = (doc: any): string[] => {
+          const arr = Array.isArray(doc.images) ? doc.images : [];
+          const single = typeof doc.image_url === 'string' && doc.image_url.trim() ? [doc.image_url.trim()] : [];
+          return Array.from(new Set([...arr, ...single].filter(Boolean)));
+        };
         // Transform Firestore data to match Product interface
         const transformedProducts = productsData.map((doc: any) => ({
           id: doc.id,
           name: doc.product_name,
           description: doc.description || '',
           price: doc.price || 0,
-          images: doc.image_url ? [doc.image_url] : [],
+          images: toImages(doc),
           category: doc.category || '',
           sizes: doc.sizes || [],
           colors: doc.colors || [],

@@ -4,13 +4,11 @@ import { ChevronRight, Star, ArrowRight, TrendingUp } from 'lucide-react';
 import { Product } from '../types';
 import ProductCard from '../components/ui/ProductCard';
 import Button from '../components/ui/Button';
-import { useCategories } from '../hooks/useCategories';
 import { productsService } from '../services/firestore';
 import { Sparkles } from "lucide-react";
 import { Ruler, Feather, Move, Receipt } from 'lucide-react';
 import { ReceiptText, IndianRupee } from 'lucide-react';
-import { toJsDate } from '../hooks/useCategories';
-
+import { useCategories, toJsDate } from '../hooks/useCategories';
 const HomePage: React.FC = () => {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
@@ -28,13 +26,20 @@ const HomePage: React.FC = () => {
           8
         );
 
+        const toImages = (doc: any): string[] => {
+          const arr = Array.isArray(doc.images) ? doc.images : [];
+          const single = typeof doc.image_url === 'string' && doc.image_url.trim() ? [doc.image_url.trim()] : [];
+          // Merge, filter empties, and dedupe
+          return Array.from(new Set([...arr, ...single].filter(Boolean)));
+        };
+
         // Transform Firestore data to match Product interface
         const transformedProducts = featuredProductsData.map((doc: any) => ({
           id: doc.id,
           name: doc.product_name,
           description: doc.description,
           price: doc.price,
-          images: doc.image_url ? [doc.image_url] : [],
+          images: toImages(doc), 
           category: doc.category,
           sizes: doc.sizes || [],
           colors: doc.colors || [],

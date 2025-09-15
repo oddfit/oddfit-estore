@@ -44,10 +44,10 @@ export interface Cart {
 
 export interface User {
   id: string;
-  email?: string;
   name: string;
   phone: string;
-  addresses: Address[];
+  addresses: any[];
+  role?: 'admin' | 'user';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -91,3 +91,4 @@ export interface FilterOptions {
   colors?: string[];
   sortBy?: 'price-asc' | 'price-desc' | 'rating' | 'newest';
 }
+

@@ -1,3 +1,4 @@
+// App.tsx (only the relevant bits shown)
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import ScrollToTop from './components/util/ScrollToTop';
@@ -26,6 +27,10 @@ import FAQPage from './pages/FAQPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
 import { useCart } from './contexts/CartContext';
+import AdminPage from './pages/AdminPage';
+import RequireAdmin from './routes/RequireAdmin';
+import NotAuthorizedPage from './pages/NotAuthorizedPage';
+import ProductsDashboard from './pages/ProductsDashboard';
 
 const AppContent: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -41,9 +46,10 @@ const AppContent: React.FC = () => {
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
       />
-      
+
       <main>
         <Routes>
+          {/* Public */}
           <Route path="/" element={<HomePage />} />
           <Route path="/products" element={<ProductListPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
@@ -63,9 +69,38 @@ const AppContent: React.FC = () => {
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/terms" element={<TermsOfServicePage />} />
+
+          {/* Admin-only (single protected tree) */}
+          <Route
+            path="/admin/*"
+            element={
+              <RequireAdmin>
+                <AdminPage />
+              </RequireAdmin>
+            }
+          >
+            {/* index of /admin */}
+            <Route
+              index
+              element={
+                <div className="p-6">
+                  <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
+                  <p className="text-gray-600 mt-2">Welcome to the admin panel.</p>
+                </div>
+              }
+            />
+
+            {/* ✅ This is the route you wanted */}
+            <Route path="products" element={<ProductsDashboard />} />
+
+            {/* add more admin routes later, e.g.
+                <Route path="orders" element={<AdminOrders />} /> */}
+          </Route>
+
+          <Route path="/not-authorized" element={<NotAuthorizedPage />} />
         </Routes>
       </main>
-      
+
       <Footer />
     </div>
   );
@@ -76,7 +111,7 @@ function App() {
     <AuthProvider>
       <CartProvider>
         <Router>
-          <ScrollToTop /> 
+          <ScrollToTop />
           <AppContent />
         </Router>
       </CartProvider>
