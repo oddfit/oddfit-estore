@@ -40,11 +40,24 @@ const ProductListPage: React.FC = () => {
         console.log('Raw products data:', productsData);
         console.log('Number of products fetched:', productsData.length);
         
-        const toImages = (doc: any): string[] => {
-          const arr = Array.isArray(doc.images) ? doc.images : [];
-          const single = typeof doc.image_url === 'string' && doc.image_url.trim() ? [doc.image_url.trim()] : [];
-          return Array.from(new Set([...arr, ...single].filter(Boolean)));
-        };
+      // replace your toImages with this version
+      const toImages = (doc: any): string[] => {
+        const flat = (arr: any[]): string[] =>
+          Array.isArray(arr) ? (arr as any[]).flat ? (arr as any[]).flat(2) : arr.reduce<string[]>((acc, v) => acc.concat(Array.isArray(v) ? flat(v) : v), []) : [];
+
+        const fromArray = Array.isArray(doc.images) ? flat(doc.images) : [];
+        const cleanedArray = fromArray
+          .map((s) => (typeof s === 'string' ? s.trim() : ''))
+          .filter(Boolean);
+
+        const single =
+          typeof doc.image_url === 'string' && doc.image_url.trim()
+            ? [doc.image_url.trim()]
+            : [];
+
+        return Array.from(new Set([...cleanedArray, ...single]));
+      };
+
         // Transform Firestore data to match Product interface
         const transformedProducts = productsData.map((doc: any) => ({
           id: doc.id,

@@ -17,18 +17,24 @@ import { storage } from '../services/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useCategories } from '../hooks/useCategories';
 
+/* ---------------------------------- Types ---------------------------------- */
+
 type AdminProduct = {
   id: string;
   product_name: string;
   description?: string;
   price: number;
   images?: string[];   // canonical field for multi-images
-  image_url?: string;  // for legacy compatibility (first image)
+  image_url?: string;  // for legacy single image
   category?: string;
   sizes?: string[];
   colors?: string[];
   stock?: number;
   featured?: boolean;
+  // Extra fields (we'll normalize to snake_case arrays in component state)
+  key_features?: string[];
+  wash_care?: string[];
+  perfect_for?: string[];
   createdAt?: any;
   updatedAt?: any;
 };
@@ -43,21 +49,47 @@ type NewProductForm = {
   stock: string; // form string → number on save
   featured: boolean;
   files: File[]; // images to upload
+  // Extra fields as multiline textareas in the form
+  keyFeaturesText: string;
+  washCareText: string;
+  perfectForText: string;
 };
 
-const emptyNewForm: NewProductForm = {
-  product_name: '',
-  price: '',
-  description: '',
-  category: '',
-  sizes: [],
-  colorsCsv: '',
-  stock: '',
-  featured: false,
-  files: [],
-};
+/* --------------------------------- Helpers --------------------------------- */
 
-// Upload helper
+// Convert various shapes (array or single multiline string) into a string[]
+function coerceStringArray(val: any): string[] {
+  if (Array.isArray(val)) {
+    return val.map(String).map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof val === 'string') {
+    return val
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+// Convert textarea (one item per non-empty line; bullet markers optional) → string[]
+function textareaToList(text: string): string[] {
+  return text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim().replace(/^[-*•\u2022]\s+/, ''))
+    .filter(Boolean);
+}
+
+// Simple CSV parser for colors
+function parseCsv(s: string): string[] {
+  return s
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+// Upload selected images to Storage, return download URLs
 async function uploadProductFiles(files: File[]): Promise<string[]> {
   const uploads = files.map(async (file) => {
     const safeName = `${Date.now()}_${Math.random().toString(36).slice(2)}_${file.name}`;
@@ -69,12 +101,22 @@ async function uploadProductFiles(files: File[]): Promise<string[]> {
   return Promise.all(uploads);
 }
 
-function parseCsv(s: string): string[] {
-  return s
-    .split(',')
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
+/* --------------------------------- Component -------------------------------- */
+
+const emptyNewForm: NewProductForm = {
+  product_name: '',
+  price: '',
+  description: '',
+  category: '',
+  sizes: [],
+  colorsCsv: '',
+  stock: '',
+  featured: false,
+  files: [],
+  keyFeaturesText: '',
+  washCareText: '',
+  perfectForText: '',
+};
 
 const ProductsDashboard: React.FC = () => {
   const [products, setProducts] = useState<AdminProduct[]>([]);
@@ -98,6 +140,10 @@ const ProductsDashboard: React.FC = () => {
   const [editFeatured, setEditFeatured] = useState(false);
   const [existingImages, setExistingImages] = useState<string[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
+  // Extra fields in Edit (as textareas)
+  const [editKeyFeaturesText, setEditKeyFeaturesText] = useState('');
+  const [editWashCareText, setEditWashCareText] = useState('');
+  const [editPerfectForText, setEditPerfectForText] = useState('');
 
   const { categories, loading: catsLoading } = useCategories();
 
@@ -114,32 +160,52 @@ const ProductsDashboard: React.FC = () => {
   const addCatSizes = currentAddCat?.sizes ?? [];
   const editCatSizes = currentEditCat?.sizes ?? [];
 
+  /* ------------------------------ Fetch products ----------------------------- */
+
   const fetchProducts = async () => {
     try {
       setLoading(true);
       setFetchErr('');
       const rows = await productsService.getAll();
-      // Normalize incoming docs for our UI
+
       setProducts(
-        rows.map((r: any) => ({
-          id: r.id,
-          product_name: r.product_name ?? r.name ?? '',
-          description: r.description ?? '',
-          price: Number(r.price ?? 0),
-          images: Array.isArray(r.images)
-            ? r.images
-            : r.image_url
-            ? [String(r.image_url)]
-            : [],
-          image_url: r.image_url ?? null,
-          category: r.category ?? '',
-          sizes: Array.isArray(r.sizes) ? r.sizes : [],
-          colors: Array.isArray(r.colors) ? r.colors : parseCsv(r.colors ?? ''),
-          stock: Number(r.stock ?? 0),
-          featured: Boolean(r.featured),
-          createdAt: r.createdAt,
-          updatedAt: r.updatedAt,
-        }))
+        rows.map((r: any) => {
+          // normalize extra fields regardless of old/new naming
+          const keyFeatures = coerceStringArray(r.key_features ?? r.keyFeatures);
+          const washCare = coerceStringArray(r.wash_care ?? r.washCare);
+          const perfectFor = coerceStringArray(r.perfect_for ?? r.perfectFor);
+
+          // normalize colors
+          let colors: string[] = [];
+          if (Array.isArray(r.colors)) {
+            colors = r.colors.map(String).map((s: string) => s.trim()).filter(Boolean);
+          } else if (typeof r.colors === 'string') {
+            colors = parseCsv(r.colors);
+          }
+
+          return {
+            id: r.id,
+            product_name: r.product_name ?? r.name ?? '',
+            description: r.description ?? '',
+            price: Number(r.price ?? 0),
+            images: Array.isArray(r.images)
+              ? r.images
+              : r.image_url
+              ? [String(r.image_url)]
+              : [],
+            image_url: r.image_url ?? null,
+            category: r.category ?? '',
+            sizes: Array.isArray(r.sizes) ? r.sizes : [],
+            colors,
+            stock: Number(r.stock ?? 0),
+            featured: Boolean(r.featured),
+            key_features: keyFeatures,
+            wash_care: washCare,
+            perfect_for: perfectFor,
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt,
+          } as AdminProduct;
+        })
       );
     } catch (e: any) {
       console.error('Fetch products failed:', e);
@@ -154,6 +220,7 @@ const ProductsDashboard: React.FC = () => {
   }, []);
 
   /* ------------------------------- Add product ------------------------------- */
+
   const onAddChange = (key: keyof NewProductForm, val: string | boolean | File[]) => {
     setForm((f) => ({ ...f, [key]: val as any }));
   };
@@ -199,7 +266,7 @@ const ProductsDashboard: React.FC = () => {
       // 1) Upload images
       const urls = await uploadProductFiles(form.files);
 
-      // 2) Build payload
+      // 2) Build payload (extra fields as arrays)
       const payload = {
         product_name: form.product_name.trim(),
         description: form.description.trim(),
@@ -209,8 +276,11 @@ const ProductsDashboard: React.FC = () => {
         colors: parseCsv(form.colorsCsv),
         stock: Number.isNaN(stockNum) ? 0 : stockNum,
         featured: !!form.featured,
-        images: urls,                // canonical multi-image
-        image_url: urls[0] || '',    // legacy convenience
+        images: urls,             // canonical multi-image
+        image_url: urls[0] || '', // legacy convenience
+        key_features: textareaToList(form.keyFeaturesText),
+        wash_care: textareaToList(form.washCareText),
+        perfect_for: textareaToList(form.perfectForText),
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -232,6 +302,7 @@ const ProductsDashboard: React.FC = () => {
   };
 
   /* --------------------------------- Edit modal -------------------------------- */
+
   const openEdit = (p: AdminProduct) => {
     setEditing(p);
     setEditName(p.product_name || '');
@@ -244,6 +315,12 @@ const ProductsDashboard: React.FC = () => {
     setEditFeatured(!!p.featured);
     setExistingImages(Array.isArray(p.images) ? [...p.images] : p.image_url ? [p.image_url] : []);
     setNewFiles([]);
+
+    // Seed extra fields textareas (one item per line)
+    setEditKeyFeaturesText((p.key_features || []).join('\n'));
+    setEditWashCareText((p.wash_care || []).join('\n'));
+    setEditPerfectForText((p.perfect_for || []).join('\n'));
+
     setEditOpen(true);
   };
 
@@ -287,7 +364,7 @@ const ProductsDashboard: React.FC = () => {
         ...newUrls,
       ];
 
-      // Make sure it's a flat array of strings
+      // Build update payload (flat arrays only)
       const payload: Partial<AdminProduct> = {
         product_name: editName.trim(),
         description: editDesc.trim(),
@@ -299,6 +376,9 @@ const ProductsDashboard: React.FC = () => {
         featured: !!editFeatured,
         images: mergedImages,
         image_url: mergedImages[0] || '',
+        key_features: textareaToList(editKeyFeaturesText),
+        wash_care: textareaToList(editWashCareText),
+        perfect_for: textareaToList(editPerfectForText),
         updatedAt: new Date(),
       };
 
@@ -406,6 +486,22 @@ const ProductsDashboard: React.FC = () => {
                     <div className="font-medium text-gray-900 line-clamp-2">{p.product_name}</div>
                     <div className="text-sm text-gray-600 mt-1">{p.category || '—'}</div>
                     <div className="mt-2 font-semibold">₹{Number(p.price ?? 0).toFixed(2)}</div>
+
+                    {/* Mini preview of extra fields (optional) */}
+                    {(p.key_features?.length || p.wash_care?.length || p.perfect_for?.length) ? (
+                      <div className="mt-2 text-xs text-gray-500 space-y-1">
+                        {p.key_features?.length ? (
+                          <div><span className="font-semibold">Key:</span> {p.key_features.slice(0, 2).join(' • ')}{(p.key_features.length > 2) ? '…' : ''}</div>
+                        ) : null}
+                        {p.wash_care?.length ? (
+                          <div><span className="font-semibold">Care:</span> {p.wash_care.slice(0, 2).join(' • ')}{(p.wash_care.length > 2) ? '…' : ''}</div>
+                        ) : null}
+                        {p.perfect_for?.length ? (
+                          <div><span className="font-semibold">For:</span> {p.perfect_for.slice(0, 2).join(' • ')}{(p.perfect_for.length > 2) ? '…' : ''}</div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     <div className="mt-3 flex justify-end">
                       <Button size="sm" variant="outline" onClick={() => openEdit(p)}>
                         <Pencil className="h-4 w-4 mr-1" />
@@ -440,6 +536,8 @@ const ProductsDashboard: React.FC = () => {
             value={form.stock}
             onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
           />
+
+          {/* Category */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
             <select
@@ -499,9 +597,7 @@ const ProductsDashboard: React.FC = () => {
                   })}
                 </div>
               ) : (
-                <div className="text-xs text-gray-500">
-                  No sizes configured for this category.
-                </div>
+                <div className="text-xs text-gray-500">No sizes configured for this category.</div>
               )
             ) : (
               <div className="text-xs text-gray-500">Select a category first.</div>
@@ -523,6 +619,38 @@ const ProductsDashboard: React.FC = () => {
               rows={4}
               className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               placeholder="Optional details…"
+            />
+          </div>
+
+          {/* Extra fields (multiline) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Key features</label>
+            <textarea
+              value={form.keyFeaturesText}
+              onChange={(e) => setForm((f) => ({ ...f, keyFeaturesText: e.target.value }))}
+              rows={4}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder={`One per line, e.g.\nFront pleats for umbrella-fit\nPlain back with A-line finish`}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Wash care</label>
+            <textarea
+              value={form.washCareText}
+              onChange={(e) => setForm((f) => ({ ...f, washCareText: e.target.value }))}
+              rows={3}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder={`One per line, e.g.\nMachine wash cold\nDo not bleach`}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Perfect for</label>
+            <textarea
+              value={form.perfectForText}
+              onChange={(e) => setForm((f) => ({ ...f, perfectForText: e.target.value }))}
+              rows={3}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder={`One per line, e.g.\nOffice wear\nFestive occasions`}
             />
           </div>
 
@@ -598,6 +726,7 @@ const ProductsDashboard: React.FC = () => {
             <Input label="Price (₹)" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} required />
             <Input label="Stock" value={editStock} onChange={(e) => setEditStock(e.target.value)} />
 
+            {/* Category */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
               <select
@@ -676,6 +805,38 @@ const ProductsDashboard: React.FC = () => {
                 rows={4}
                 className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="Optional details…"
+              />
+            </div>
+
+            {/* Extra fields (multiline) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Key features</label>
+              <textarea
+                value={editKeyFeaturesText}
+                onChange={(e) => setEditKeyFeaturesText(e.target.value)}
+                rows={4}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder={`One per line, e.g.\nFront pleats for umbrella-fit\nPlain back with A-line finish`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Wash care</label>
+              <textarea
+                value={editWashCareText}
+                onChange={(e) => setEditWashCareText(e.target.value)}
+                rows={3}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder={`One per line, e.g.\nMachine wash cold\nDo not bleach`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Perfect for</label>
+              <textarea
+                value={editPerfectForText}
+                onChange={(e) => setEditPerfectForText(e.target.value)}
+                rows={3}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder={`One per line, e.g.\nOffice wear\nFestive occasions`}
               />
             </div>
 
