@@ -5,6 +5,7 @@ import { Product } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from './Button';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface ProductCardProps {
   product: Product;
@@ -24,6 +25,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const { addToCart } = useCart();
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Prefer product.images[], else single image_url, else fallback
   const imgs = useMemo(() => {
@@ -56,7 +59,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   const handleAddToCart = async (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!currentUser) return;
+    const isAnon = (currentUser as any)?.isAnonymous === true;
+    if (!currentUser || isAnon) {
+      const redirect = location.pathname + location.search + location.hash;
+      navigate(`/login?redirect=${encodeURIComponent(redirect)}`);
+      return;
+    }
     const defaultSize = product.sizes?.[0] ?? 'M';
     const defaultColor = product.colors?.[0] ?? 'Black';
     await addToCart(product, defaultSize, defaultColor, 1);

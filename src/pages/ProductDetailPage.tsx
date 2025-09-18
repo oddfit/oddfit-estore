@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Star,
   Heart,
@@ -36,6 +36,7 @@ type ExtendedProduct = Product & {
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation(); 
   const [product, setProduct] = useState<ExtendedProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState('');
@@ -196,6 +197,12 @@ const ProductDetailPage: React.FC = () => {
 
   const handleAddToCart = async () => {
     if (!product) return;
+    const isAnon = (currentUser as any)?.isAnonymous === true;
+    if (!currentUser || isAnon) {
+      const redirect = location.pathname + location.search + location.hash;
+      navigate(`/login?redirect=${encodeURIComponent(redirect)}`);
+      return;
+    }
     const chosenSize = selectedSize || product.sizes?.[0] || 'M';
     const chosenColor = selectedColor || product.colors?.[0] || 'Black';
 
