@@ -30,7 +30,13 @@ import { useCart } from './contexts/CartContext';
 import AdminPage from './pages/AdminPage';
 import RequireAdmin from './routes/RequireAdmin';
 import NotAuthorizedPage from './pages/NotAuthorizedPage';
-import ProductsDashboard from './pages/ProductsDashboard';
+import AdminProducts from './pages/AdminProducts';
+import AdminOrders from './pages/AdminOrders';
+import AdminCustomers from './pages/AdminCustomers';
+import AdminCategories from './pages/AdminCategories';
+import AdminReturns from './pages/AdminReturns';
+import AddressesPage from './pages/AddressesPage';
+import AdminDashboard from './pages/AdminDashboard'
 
 const AppContent: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -61,6 +67,7 @@ const AppContent: React.FC = () => {
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
+          <Route path="/addresses" element={<AddressesPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/size-guide" element={<SizeGuidePage />} />
@@ -91,7 +98,12 @@ const AppContent: React.FC = () => {
             />
 
             {/* ✅ This is the route you wanted */}
-            <Route path="products" element={<ProductsDashboard />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="products" element={<AdminProducts />} />
+            <Route path="orders" element={<AdminOrders />} />
+            <Route path="customers" element={<AdminCustomers />} />
+            <Route path="categories" element={<AdminCategories />} />
+            <Route path="returns" element={<AdminReturns />} />
 
             {/* add more admin routes later, e.g.
                 <Route path="orders" element={<AdminOrders />} /> */}

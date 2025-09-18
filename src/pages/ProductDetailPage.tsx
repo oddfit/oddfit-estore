@@ -257,11 +257,11 @@ const ProductDetailPage: React.FC = () => {
         <div className="lg:grid lg:grid-cols-2 lg:gap-x-12">
           {/* Product Images */}
           <div className="mb-8 lg:mb-0">
-            <div className="aspect-square bg-gray-200 rounded-lg overflow-hidden mb-4 relative">
+            <div className="aspect-square bg-gray-200 rounded-lg overflow-hidden mb-4 relative bg-top">
               <img
                 src={currentImage}
                 alt={product.name}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover object-top"
                 onClick={canSlide ? nextImage : undefined}
               />
 

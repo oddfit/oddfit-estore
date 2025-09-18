@@ -1,3 +1,4 @@
+// src/pages/LoginPage.tsx
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogIn, Shield, RefreshCcw } from 'lucide-react';
@@ -39,6 +40,20 @@ const LoginPage: React.FC = () => {
     return redirect && redirect.startsWith('/') ? redirect : '/checkout';
   };
 
+  const friendlyError = (err: any) => {
+    const code = (err?.code || '').toString().toLowerCase();
+    const msg = (err?.message || '').toString().toLowerCase();
+
+    if (code.includes('invalid-phone-number')) return 'Please enter a valid phone number.';
+    if (code.includes('missing-phone-number')) return 'Phone number is missing. Please try again.';
+    if (code.includes('captcha-check-failed')) return 'Security check failed. Please reload and try again.';
+    if (code.includes('too-many-requests')) return 'Too many attempts. Please wait a bit and try again.';
+    if (msg.includes('timeout')) return 'Login timed out. Please try again.';
+    if (code.includes('invalid-verification-code')) return 'Invalid OTP. Please try again.';
+    if (code.includes('session-expired')) return 'OTP session expired. Please request a new code.';
+    return err?.message || 'Something went wrong. Please try again.';
+  };
+
   // Initialize a SINGLE visible reCAPTCHA
   useEffect(() => {
     let alive = true;
@@ -52,7 +67,7 @@ const LoginPage: React.FC = () => {
         const verifier = await initRecaptcha(
           RECAPTCHA_ID,
           'normal',
-          () => setError('Security verification expired. Please try again.')
+          () => setError('Security verification expired. Please click Reload and try again.')
         );
         if (!alive) return;
         setRecaptchaVerifier(verifier);
@@ -93,6 +108,9 @@ const LoginPage: React.FC = () => {
       return;
     }
 
+    // Format to E.164 (+91XXXXXXXXXX)
+    const e164 = `+91${phoneNumber}`;
+
     try {
       setError('');
       setLoading(true);
@@ -100,13 +118,13 @@ const LoginPage: React.FC = () => {
       // For "normal" size, verify() ensures the challenge is solved and returns a token
       await recaptchaVerifier.verify();
 
-      const result = await sendOTP(phoneNumber, recaptchaVerifier);
+      const result = await sendOTP(e164, recaptchaVerifier);
       setConfirmationResult(result);
       setStep('otp');
     } catch (err: any) {
       console.error('Send OTP error:', err);
-      setError(err?.message || 'Failed to send OTP. Please try again.');
-      // A simple reset (not destroy) is enough for the checkbox widget
+      setError(friendlyError(err));
+      // Reset checkbox widget so user can try again
       resetRecaptcha();
     } finally {
       setLoading(false);
@@ -131,7 +149,8 @@ const LoginPage: React.FC = () => {
       await verifyOTP(confirmationResult, otp);
       navigate(safeRedirectFromQuery(), { replace: true });
     } catch (err: any) {
-      setError(err?.message || 'Invalid OTP. Please try again.');
+      console.error('Verify OTP error:', err);
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -291,7 +310,7 @@ const LoginPage: React.FC = () => {
           <p className="text-gray-600">
             Don't have an account?{' '}
             <Link
-              to={`/register?redirect=${encodeURIComponent(safeRedirectFromQuery())}`}
+              to={registerHref}
               className="text-purple-600 hover:text-purple-700 font-bold transition-colors"
             >
               Create Account

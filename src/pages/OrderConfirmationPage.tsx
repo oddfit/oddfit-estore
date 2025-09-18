@@ -1,42 +1,45 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/OrderConfirmationPage.tsx
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { CheckCircle, Package, Truck, MapPin } from 'lucide-react';
+import { CheckCircle, Truck, MapPin } from 'lucide-react';
 import { ordersService } from '../services/firestore';
 import { Order } from '../types';
 import Button from '../components/ui/Button';
 import { toJsDate } from '../hooks/useCategories';
 
+const FALLBACK =
+  'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
+
 const OrderConfirmationPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
-  const [order, setOrder] = useState<Order | null>(null);
+  const [order, setOrder] = useState<Order | (Order & any) | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchOrder = async () => {
       if (!orderId) return;
-      
       try {
-        const orderData = await ordersService.getById(orderId);
-        if (orderData) {
-          setOrder({
-            id: orderData.id,
-            userId: orderData.userId,
-            items: orderData.items,
-            total: orderData.total,
-            status: orderData.status,
-            paymentMethod: orderData.paymentMethod,
-            shippingAddress: orderData.shippingAddress,
-            billingAddress: orderData.billingAddress,
-            orderDate: toJsDate(orderData.orderDate) || new Date(),
-            estimatedDelivery: orderData.estimatedDelivery ? toJsDate(orderData.estimatedDelivery) : undefined,
-            actualDelivery: orderData.actualDelivery ? toJsDate(orderData.actualDelivery) : undefined,
-            trackingNumber: orderData.trackingNumber,
-            createdAt: toJsDate(orderData.createdAt) || new Date(),
-            updatedAt: toJsDate(orderData.updatedAt) || new Date(),
-          });
+        setLoading(true);
+        const data: any = await ordersService.getById(orderId);
+        if (data) {
+          // Normalize timestamps safely
+          const normalized = {
+            ...data,
+            id: data.id,
+            orderDate: toJsDate(data.orderDate) || new Date(),
+            estimatedDelivery: data.estimatedDelivery
+              ? toJsDate(data.estimatedDelivery)
+              : undefined,
+            actualDelivery: data.actualDelivery
+              ? toJsDate(data.actualDelivery)
+              : undefined,
+            createdAt: toJsDate(data.createdAt) || new Date(),
+            updatedAt: toJsDate(data.updatedAt) || new Date(),
+          };
+          setOrder(normalized as Order);
         }
-      } catch (error) {
-        console.error('Error fetching order:', error);
+      } catch (err) {
+        console.error('Error fetching order:', err);
       } finally {
         setLoading(false);
       }
@@ -45,10 +48,45 @@ const OrderConfirmationPage: React.FC = () => {
     fetchOrder();
   }, [orderId]);
 
+  // Helpers to handle various item shapes
+  const items: any[] = useMemo(() => {
+    if (!order?.items) return [];
+    return Array.isArray(order.items) ? order.items : Object.values(order.items);
+  }, [order]);
+
+  const getItemKey = (it: any, idx: number) =>
+    it?.id || it?.productId || it?.sku || `${it?.name || 'item'}-${idx}`;
+
+  const getItemName = (it: any) =>
+    it?.name || it?.product?.name || 'Item';
+
+  const getItemQty = (it: any) =>
+    Number(it?.quantity ?? it?.qty ?? 1);
+
+  const getItemPrice = (it: any) =>
+    Number(it?.price ?? it?.unitPrice ?? it?.amount ?? 0);
+
+  const getItemImage = (it: any) =>
+    it?.image ||
+    it?.product?.images?.[0] ||
+    (it?.product as any)?.image_url ||
+    FALLBACK;
+
+  const derivedSubtotal = useMemo(
+    () =>
+      items.reduce((sum, it) => sum + getItemQty(it) * getItemPrice(it), 0),
+    [items]
+  );
+
+  const displayOrderCode =
+    (order as any)?.orderCode ||
+    (order as any)?.orderNumber ||
+    order?.id;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
       </div>
     );
   }
@@ -82,65 +120,84 @@ const OrderConfirmationPage: React.FC = () => {
         <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
           <div className="border-b pb-4 mb-4">
             <h2 className="text-lg font-medium text-gray-900">Order Details</h2>
-            <p className="text-sm text-gray-600">Order #{order.id}</p>
             <p className="text-sm text-gray-600">
-              Placed on {new Date(order.orderDate).toLocaleDateString()}
+              Order #{String(displayOrderCode)}
+            </p>
+            <p className="text-sm text-gray-600">
+              Placed on {new Date(order.orderDate as any).toLocaleDateString()}
             </p>
           </div>
 
           {/* Items */}
           <div className="space-y-4 mb-6">
-            {order.items.map((item) => (
-              <div key={item.id} className="flex items-center">
-                <img
-                  className="w-16 h-16 rounded-md object-cover"
-                  src={item.product?.images?.[0] || (item.product as any)?.image_url || 'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg'}
-                  alt={item.product?.name}
-                />
-                <div className="ml-4 flex-1">
-                  <h4 className="text-sm font-medium text-gray-900">
-                    {item.product?.name}
-                  </h4>
-                  <p className="text-sm text-gray-500">
-                    Size: {item.size} | Color: {item.color}
-                  </p>
-                  <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+            {items.map((item, idx) => {
+              const qty = getItemQty(item);
+              const price = getItemPrice(item);
+              return (
+                <div key={getItemKey(item, idx)} className="flex items-center">
+                  <img
+                    className="w-16 h-16 rounded-md object-cover"
+                    src={getItemImage(item)}
+                    alt={getItemName(item)}
+                  />
+                  <div className="ml-4 flex-1">
+                    <h4 className="text-sm font-medium text-gray-900">
+                      {getItemName(item)}
+                    </h4>
+                    <p className="text-sm text-gray-500">
+                      {item.size ? `Size: ${item.size}` : null}
+                      {item.size && item.color ? ' | ' : null}
+                      {item.color ? `Color: ${item.color}` : null}
+                    </p>
+                    <p className="text-sm text-gray-500">Quantity: {qty}</p>
+                  </div>
+                  <div className="text-sm font-medium text-gray-900">
+                    ₹{(price * qty).toFixed(2)}
+                  </div>
                 </div>
-                <div className="text-sm font-medium text-gray-900">
-                  ₹{(item.price * item.quantity).toFixed(2)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Total */}
           <div className="border-t pt-4">
             <div className="flex justify-between text-base font-medium">
               <span>Total</span>
-              <span>₹{order.total.toFixed(2)}</span>
+              <span>
+                ₹{Number((order as any).total ?? derivedSubtotal).toFixed(2)}
+              </span>
             </div>
           </div>
         </div>
 
         {/* Shipping Address */}
-        <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
-          <div className="flex items-center mb-4">
-            <MapPin className="h-5 w-5 text-gray-400 mr-2" />
-            <h3 className="text-lg font-medium text-gray-900">Shipping Address</h3>
+        {order.shippingAddress && (
+          <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
+            <div className="flex items-center mb-4">
+              <MapPin className="h-5 w-5 text-gray-400 mr-2" />
+              <h3 className="text-lg font-medium text-gray-900">Shipping Address</h3>
+            </div>
+            <div className="text-sm text-gray-600">
+              {order.shippingAddress.name && (
+                <p className="font-medium">{order.shippingAddress.name}</p>
+              )}
+              {order.shippingAddress.phone && <p>{order.shippingAddress.phone}</p>}
+              {order.shippingAddress.addressLine1 && (
+                <p>{order.shippingAddress.addressLine1}</p>
+              )}
+              {order.shippingAddress.addressLine2 && (
+                <p>{order.shippingAddress.addressLine2}</p>
+              )}
+              <p>
+                {[order.shippingAddress.city, order.shippingAddress.state]
+                  .filter(Boolean)
+                  .join(', ')}{' '}
+                {order.shippingAddress.zipCode}
+              </p>
+              {order.shippingAddress.country && <p>{order.shippingAddress.country}</p>}
+            </div>
           </div>
-          <div className="text-sm text-gray-600">
-            <p className="font-medium">{order.shippingAddress.name}</p>
-            <p>{order.shippingAddress.phone}</p>
-            <p>{order.shippingAddress.addressLine1}</p>
-            {order.shippingAddress.addressLine2 && (
-              <p>{order.shippingAddress.addressLine2}</p>
-            )}
-            <p>
-              {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
-            </p>
-            <p>{order.shippingAddress.country}</p>
-          </div>
-        </div>
+        )}
 
         {/* Delivery Info */}
         <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
@@ -149,19 +206,22 @@ const OrderConfirmationPage: React.FC = () => {
             <h3 className="text-lg font-medium text-gray-900">Delivery Information</h3>
           </div>
           <div className="text-sm text-gray-600">
-            <p>
-              <span className="font-medium">Status:</span>{' '}
-              <span className="capitalize">{order.status}</span>
-            </p>
-            {order.estimatedDelivery && (
+            {(order as any).status && (
               <p>
-                <span className="font-medium">Estimated Delivery:</span>{' '}
-                {new Date(order.estimatedDelivery).toLocaleDateString()}
+                <span className="font-medium">Status:</span>{' '}
+                <span className="capitalize">{(order as any).status}</span>
               </p>
             )}
-            {order.trackingNumber && (
+            {(order as any).estimatedDelivery && (
               <p>
-                <span className="font-medium">Tracking Number:</span> {order.trackingNumber}
+                <span className="font-medium">Estimated Delivery:</span>{' '}
+                {new Date((order as any).estimatedDelivery).toLocaleDateString()}
+              </p>
+            )}
+            {(order as any).trackingNumber && (
+              <p>
+                <span className="font-medium">Tracking Number:</span>{' '}
+                {(order as any).trackingNumber}
               </p>
             )}
           </div>

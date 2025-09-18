@@ -118,7 +118,7 @@ const emptyNewForm: NewProductForm = {
   perfectForText: '',
 };
 
-const ProductsDashboard: React.FC = () => {
+const AdminProducts: React.FC = () => {
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetchErr, setFetchErr] = useState('');
@@ -935,4 +935,4 @@ const ProductsDashboard: React.FC = () => {
   );
 };
 
-export default ProductsDashboard;
+export default AdminProducts;
