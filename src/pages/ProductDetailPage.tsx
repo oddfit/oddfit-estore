@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Product } from '../types';
 import { productsService } from '../services/firestore';
+import { getInventoryForProduct } from '../services/inventory';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import Button from '../components/ui/Button';
@@ -36,9 +37,14 @@ type ExtendedProduct = Product & {
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const location = useLocation(); 
+  const location = useLocation();
   const [product, setProduct] = useState<ExtendedProduct | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // inventory (size -> stock)
+  const [inv, setInv] = useState<Record<string, number>>({});
+  const [invLoading, setInvLoading] = useState(false);
+
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -47,7 +53,7 @@ const ProductDetailPage: React.FC = () => {
 
   // FAQ-like collapsibles
   const [open, setOpen] = useState<{ [key: string]: boolean }>({
-    keyFeatures: false,   // open Key features by default
+    keyFeatures: false,
     washCare: false,
     perfectFor: false,
   });
@@ -84,54 +90,33 @@ const ProductDetailPage: React.FC = () => {
       return val.map(String).map(s => s.trim()).filter(Boolean);
     }
     if (typeof val === 'string') {
-      // Normalize line endings
       const lines = val.replace(/\r\n/g, '\n').split('\n');
-
       const out: string[] = [];
       let buf: string[] = [];
-
       for (let raw of lines) {
         let line = raw.trim();
-
-        // Blank line => end current bullet
-        if (!line) {
-          if (buf.length) {
-            out.push(buf.join(' '));
-            buf = [];
-          }
-          continue;
-        }
-
-        // If a new line starts with a bullet marker, start a new bullet
+        if (!line) { if (buf.length) { out.push(buf.join(' ')); buf = []; } continue; }
         if (/^[-*•\u2022]\s+/.test(line)) {
-          if (buf.length) {
-            out.push(buf.join(' '));
-            buf = [];
-          }
+          if (buf.length) { out.push(buf.join(' ')); buf = []; }
           line = line.replace(/^[-*•\u2022]\s+/, '');
         }
-
-        // Otherwise treat it as a soft wrap -> join with spaces
         buf.push(line);
       }
-
       if (buf.length) out.push(buf.join(' '));
       return out.filter(Boolean);
     }
     return [];
   };
 
+  // Fetch product
   useEffect(() => {
     const fetchProduct = async () => {
       if (!id) return;
-
       try {
         setLoading(true);
         const doc = await productsService.getById(id);
-
         if (doc) {
           const images = toImages(doc);
-
           const transformed: ExtendedProduct = {
             id: doc.id,
             name: doc.product_name,
@@ -141,26 +126,18 @@ const ProductDetailPage: React.FC = () => {
             category: doc.category || '',
             sizes: Array.isArray(doc.sizes) ? doc.sizes : [],
             colors: Array.isArray(doc.colors) ? doc.colors : [],
-            stock: doc.stock || 0,
+            stock: doc.stock || 0, // legacy; we’ll rely on inv when sizes exist
             rating: doc.rating || 0,
             reviewCount: doc.reviewCount || 0,
             featured: doc.featured || false,
             createdAt: toJsDate(doc.createdAt) || new Date(),
             updatedAt: toJsDate(doc.updatedAt) || new Date(),
-
-            // Extra fields (supports snake_case or camelCase in Firestore)
             keyFeatures: toStringArray(doc.keyFeatures ?? doc.key_features),
             washCare: toStringArray(doc.washCare ?? doc.wash_care),
             perfectFor: toStringArray(doc.perfectFor ?? doc.perfect_for),
           };
-
           setProduct(transformed);
-
-          // Preselect options if available
-          setSelectedSize(transformed.sizes[0] || '');
           setSelectedColor(transformed.colors[0] || '');
-
-          // Reset image index when product changes
           setSelectedImageIndex(0);
         }
       } catch (error) {
@@ -169,24 +146,46 @@ const ProductDetailPage: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchProduct();
   }, [id]);
 
-  const canSlide = (product?.images?.length || 0) > 1;
+  // Fetch inventory for this product (size-level)
+  useEffect(() => {
+    (async () => {
+      if (!product?.id) return;
+      try {
+        setInvLoading(true);
+        const map = await getInventoryForProduct(product.id);
+        setInv(map);
 
+        // Preselect first size with stock > 0; otherwise first size
+        if (product.sizes?.length) {
+          const withStock = product.sizes.find((s) => (map[s] ?? 0) > 0);
+          setSelectedSize(withStock || product.sizes[0]);
+          // adjust quantity if needed
+          const avail = withStock ? map[withStock] : (map[product.sizes[0]] ?? 0);
+          setQuantity((q) => Math.min(Math.max(1, q), Math.max(1, avail || 1)));
+        }
+      } catch (e) {
+        console.error('Failed to load inventory for product:', e);
+      } finally {
+        setInvLoading(false);
+      }
+    })();
+  }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // slideshow helpers
+  const canSlide = (product?.images?.length || 0) > 1;
   const nextImage = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!product || !canSlide) return;
     setSelectedImageIndex((i) => (i + 1) % product.images.length);
   };
-
   const prevImage = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!product || !canSlide) return;
     setSelectedImageIndex((i) => (i - 1 + product.images.length) % product.images.length);
   };
-
   const currentImage = useMemo(
     () =>
       product?.images?.[selectedImageIndex] ||
@@ -195,8 +194,31 @@ const ProductDetailPage: React.FC = () => {
     [product, selectedImageIndex]
   );
 
-  const handleAddToCart = async () => {
+  // Stock helpers
+  const sizeStock = (size: string): number => {
+    if (product?.sizes?.length) return Number(inv[size] ?? 0);
+    // no sizes => fall back to legacy product.stock
+    return Number(product?.stock ?? 0);
+  };
+
+  const availableForSelected = sizeStock(selectedSize);
+
+  // Disable “quick add” (Add to Cart) if no stock for selected size
+  const canQuickAdd =
+    product != null &&
+    ((product.sizes?.length
+      ? availableForSelected > 0 && quantity <= availableForSelected
+      : Number(product.stock ?? 0) > 0 && quantity <= Number(product.stock ?? 0)));
+
+  // Enforce quantity caps
+  useEffect(() => {
     if (!product) return;
+    const maxQty = product.sizes?.length ? availableForSelected : Number(product.stock ?? 0) || 1;
+    setQuantity((q) => Math.min(Math.max(1, q), Math.max(1, maxQty || 1)));
+  }, [availableForSelected, product?.stock, product?.sizes?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAddToCart = async () => {
+    if (!product || !canQuickAdd) return;
     const isAnon = (currentUser as any)?.isAnonymous === true;
     if (!currentUser || isAnon) {
       const redirect = location.pathname + location.search + location.hash;
@@ -342,7 +364,7 @@ const ProductDetailPage: React.FC = () => {
               <span className="text-3xl font-bold text-gray-900">₹{Number(product.price).toFixed(2)}</span>
             </div>
 
-            {/* Description (always visible) */}
+            {/* Description */}
             {product.description && (
               <div className="mb-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Description</h3>
@@ -350,7 +372,7 @@ const ProductDetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* Extra sections (FAQ-style) */}
+            {/* Extra sections */}
             {hasAnyExtras && (
               <div className="space-y-3 mb-8">
                 {/* Key Features */}
@@ -435,22 +457,38 @@ const ProductDetailPage: React.FC = () => {
 
             {/* Size Selection */}
             {product.sizes.length > 0 && (
-              <div className="mb-6">
+              <div className="mb-4">
                 <h3 className="text-lg font-medium text-gray-900 mb-3">Size</h3>
                 <div className="grid grid-cols-4 gap-2">
-                  {product.sizes.map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
-                      className={`py-3 px-4 text-sm font-medium rounded-lg border transition-colors ${
-                        selectedSize === size
-                          ? 'border-purple-600 bg-purple-50 text-purple-600'
-                          : 'border-gray-300 text-gray-700 hover:border-gray-400'
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
+                  {product.sizes.map((size) => {
+                    const stk = sizeStock(size);
+                    const disabled = (invLoading && !(size in inv)) || stk <= 0;
+                    return (
+                      <button
+                        key={size}
+                        onClick={() => !disabled && setSelectedSize(size)}
+                        disabled={disabled}
+                        className={`py-3 px-4 text-sm font-medium rounded-lg border transition-colors ${
+                          selectedSize === size
+                            ? 'border-purple-600 bg-purple-50 text-purple-600'
+                            : 'border-gray-300 text-gray-700 hover:border-gray-400'
+                        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title={disabled ? 'Out of stock' : ''}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* tiny helper under sizes */}
+                <div className="mt-2 text-xs text-gray-600">
+                  {selectedSize
+                    ? (availableForSelected > 0
+                        ? (availableForSelected <= 5
+                            ? `Only ${availableForSelected} left`
+                            : `In stock`)
+                        : 'Out of stock')
+                    : ''}
                 </div>
               </div>
             )}
@@ -478,18 +516,23 @@ const ProductDetailPage: React.FC = () => {
             )}
 
             {/* Quantity */}
-            <div className="mb-8">
+            <div className="mb-6">
               <h3 className="text-lg font-medium text-gray-900 mb-3">Quantity</h3>
               <div className="flex items-center space-x-4">
                 <button
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                   className="flex items-center justify-center w-10 h-10 rounded-lg border border-gray-300 hover:bg-gray-50"
                 >
                   <Minus className="h-4 w-4" />
                 </button>
                 <span className="text-lg font-medium w-8 text-center">{quantity}</span>
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() =>
+                    setQuantity((q) => {
+                      const maxQty = product.sizes?.length ? availableForSelected : Number(product.stock ?? 0) || 1;
+                      return Math.min(q + 1, Math.max(1, maxQty || 1));
+                    })
+                  }
                   className="flex items-center justify-center w-10 h-10 rounded-lg border border-gray-300 hover:bg-gray-50"
                 >
                   <Plus className="h-4 w-4" />
@@ -497,19 +540,19 @@ const ProductDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Add to Cart */}
+            {/* Add to Cart (Quick Add) */}
             <div className="flex space-x-4 mb-8">
               <Button
                 onClick={handleAddToCart}
                 loading={addingToCart}
-                disabled={product.stock === 0}
+                disabled={!canQuickAdd}
                 className="flex-1 relative z-10"
                 size="lg"
               >
                 <ShoppingCart className="h-5 w-5 mr-2" />
-                Add to Cart
+                {canQuickAdd ? 'Add to Cart' : 'Out of Stock'}
               </Button>
-              <button className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+              <button className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" title="Add to wishlist">
                 <Heart className="h-6 w-6 text-gray-600" />
               </button>
             </div>

@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Tag, Users, RefreshCw, Settings, Receipt,
-} from 'lucide-react';
+Boxes} from 'lucide-react';
 
 type SidebarProps = {
   onNavigate?: () => void; // lets us close the drawer on mobile after clicking
@@ -15,6 +15,7 @@ const nav = [
   { to: '/admin/categories', label: 'Categories', icon: Tag },
   { to: '/admin/customers', label: 'Customers', icon: Users },
   { to: '/admin/returns', label: 'Returns', icon: RefreshCw },
+  { to: '/admin/inventory', label: 'Inventory', icon: Boxes },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 

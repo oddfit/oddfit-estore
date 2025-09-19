@@ -1,10 +1,25 @@
 // src/pages/AdminDashboard.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  TrendingUp, ShoppingBag, Users, RefreshCcw, Package, IndianRupee, BarChart3, Clock,
+  TrendingUp,
+  ShoppingBag,
+  Users,
+  RefreshCcw,
+  Package,
+  IndianRupee,
+  BarChart3,
+  Clock,
+  Boxes,
+  AlertTriangle
 } from 'lucide-react';
 import Button from '../components/ui/Button';
-import { ordersService, productsService, usersService, returnsService } from '../services/firestore';
+import {
+  ordersService,
+  productsService,
+  usersService,
+  returnsService,
+} from '../services/firestore';
+import { getAll as getAllInventory } from '../services/inventory';
 import { toJsDate } from '../hooks/useCategories';
 
 type AnyOrder = {
@@ -17,7 +32,8 @@ type AnyOrder = {
   orderNumber?: number;
   orderCode?: string;
   createdAt?: any;
-  items?: any[]; // we’ll normalize
+  orderDate?: any;
+  items?: any[];
 };
 
 type AnyUser = {
@@ -40,69 +56,48 @@ type AnyReturn = {
   createdAt?: any;
 };
 
+type InvRow = {
+  id: string;
+  productId: string;
+  size: string;
+  stock: number;
+  updatedAt?: any;
+};
+
 function currency(n: number) {
   return `₹${n.toFixed(2)}`;
 }
-
 function isRevenueOrder(o: AnyOrder) {
-  const status = (o.status || '').toLowerCase();
-  const pay = (o.paymentStatus || '').toLowerCase();
-  // Count revenue for paid or moving/fulfilled orders; exclude cancelled
-  if (pay === 'paid') return true;
-  if (['paid', 'processing', 'shipped', 'delivered'].includes(status)) return true;
-  return false;
+  const status = (o.status || 'pending').toLowerCase();
+  const pay = (o.paymentStatus || 'pending').toLowerCase();
+  if (status === 'cancelled' || pay === 'failed' || pay === 'refunded') return false;
+  return true;
 }
+function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+function sameDay(a: Date, b: Date) { return startOfDay(a).getTime() === startOfDay(b).getTime(); }
+function dateInRange(d: Date, from: Date, to: Date) { const t = d.getTime(); return t >= from.getTime() && t <= to.getTime(); }
+function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d; }
 
-function startOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-function sameDay(a: Date, b: Date) {
-  return startOfDay(a).getTime() === startOfDay(b).getTime();
-}
-
-function dateInRange(d: Date, from: Date, to: Date) {
-  const t = d.getTime();
-  return t >= from.getTime() && t <= to.getTime();
-}
-
-function daysAgo(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d;
-}
-
-/** tiny sparkline */
 const Sparkline: React.FC<{ values: number[] }> = ({ values }) => {
   if (!values.length) return null;
-  const w = 160;
-  const h = 40;
+  const w = 160, h = 40;
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
   const span = Math.max(max - min, 1);
   const step = values.length > 1 ? w / (values.length - 1) : w;
-
-  const pts = values
-    .map((v, i) => {
-      const x = i * step;
-      const y = h - ((v - min) / span) * h;
-      return `${x},${y}`;
-    })
-    .join(' ');
-
+  const pts = values.map((v, i) => {
+    const x = i * step;
+    const y = h - ((v - min) / span) * h;
+    return `${x},${y}`;
+  }).join(' ');
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-      <polyline
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        points={pts}
-        className="text-purple-600"
-      />
+      <polyline fill="none" stroke="currentColor" strokeWidth="2" points={pts} className="text-purple-600" />
     </svg>
   );
 };
+
+const LOW_STOCK_THRESHOLD = 5;
 
 const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -111,33 +106,52 @@ const AdminDashboard: React.FC = () => {
   const [products, setProducts] = useState<AnyProduct[]>([]);
   const [users, setUsers] = useState<AnyUser[]>([]);
   const [returns, setReturns] = useState<AnyReturn[]>([]);
+  const [inventory, setInventory] = useState<InvRow[]>([]);
   const [range, setRange] = useState<'7d' | '30d'>('7d');
 
   const refresh = async () => {
     try {
       setLoading(true);
       setErr('');
-      const [o, p, u, r] = await Promise.all([
-        ordersService.getAll(), productsService.getAll(), usersService.getAll(), returnsService.getAll(),
+      console.debug('[dashboard] refresh start');
+      const [o, p, u, r, inv] = await Promise.all([
+        ordersService.getAll(),
+        productsService.getAll(),
+        usersService.getAll(),
+        returnsService.getAll(),
+        getAllInventory(),
       ]);
 
-      // normalize orders
-      setOrders(
-        (o as any[]).map((x) => ({
-          ...x,
-          createdAt: toJsDate(x.createdAt) || new Date(),
-        }))
-      );
+      setOrders((o as any[]).map((x) => ({
+        ...x,
+        createdAt: toJsDate(x.createdAt) || null,
+        orderDate: toJsDate(x.orderDate) || null,
+      })));
       setProducts(p as any[]);
-      setUsers(
-        (u as any[]).map((x) => ({ ...x, createdAt: toJsDate(x.createdAt) || null }))
-      );
-      setReturns(
-        (r as any[]).map((x) => ({ ...x, createdAt: toJsDate(x.createdAt) || null }))
-      );
+      setUsers((u as any[]).map((x) => ({ ...x, createdAt: toJsDate(x.createdAt) || null })));
+      setReturns((r as any[]).map((x) => ({ ...x, createdAt: toJsDate(x.createdAt) || null })));
+
+      setInventory((inv as any[]).map((row) => ({
+        id: row.id,
+        productId: row.productId,
+        size: row.size,
+        stock: Number(row.stock ?? 0), // NOTE: stock (not qty)
+        updatedAt: toJsDate(row.updatedAt) || null,
+      })));
+      console.debug('[dashboard] refresh OK', {
+        orders: (o as any[]).length,
+        products: (p as any[]).length,
+        users: (u as any[]).length,
+        returns: (r as any[]).length,
+        inventory: (inv as any[]).length,
+      });
     } catch (e: any) {
-      console.error(e);
-      setErr(e?.message || 'Failed to load dashboard data.');
+      console.error('[dashboard] refresh error', e);
+      setErr(
+        e?.code === 'permission-denied'
+          ? 'Permission denied. Ensure your user has role="admin".'
+          : e?.message || 'Failed to load dashboard data.'
+      );
     } finally {
       setLoading(false);
     }
@@ -145,35 +159,69 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => { refresh(); }, []);
 
-  // Time window
-  const to = new Date();
-  const from = useMemo(() => (range === '7d' ? daysAgo(6) : daysAgo(29)), [range]);
-  from.setHours(0, 0, 0, 0);
+  const { from, to } = useMemo(() => {
+    const to = new Date();
+    const from = new Date(range === '7d' ? daysAgo(6) : daysAgo(29));
+    from.setHours(0, 0, 0, 0);
+    return { from, to };
+  }, [range]);
 
-  // Derived metrics
+  const orderDateOf = (o: AnyOrder) =>
+    (o.createdAt as Date | null) ?? (o.orderDate as Date | null) ?? null;
+
   const ordersInRange = useMemo(
     () => orders.filter((o) => {
-      const d = toJsDate(o.createdAt) || new Date();
-      return dateInRange(d, from, to);
+      const d = orderDateOf(o);
+      return d ? dateInRange(d, from, to) : false;
     }),
     [orders, from, to]
   );
 
-  const revenueOrders = useMemo(() => ordersInRange.filter(isRevenueOrder), [ordersInRange]);
-  const revenueTotal = revenueOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
-
-  const today = startOfDay(new Date());
-  const revenueToday = revenueOrders
-    .filter((o) => sameDay(toJsDate(o.createdAt) || new Date(), today))
+  const grossSalesTotal = ordersInRange
+    .filter(o => (o.status || '').toLowerCase() !== 'cancelled')
     .reduce((s, o) => s + (Number(o.total) || 0), 0);
 
+  const revenueOrders = useMemo(
+    () => ordersInRange.filter(isRevenueOrder),
+    [ordersInRange]
+  );
+
+  const revenueReceivedTotal = ordersInRange
+    .filter(o => (o.paymentStatus || '').toLowerCase() === 'paid')
+    .reduce((s, o) => s + (Number(o.total) || 0) - (Number((o as any).refundAmount) || 0), 0);
+
+  const revenueTotal = revenueOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+
+  const revenueToday = useMemo(() => {
+    const today = startOfDay(new Date());
+    return revenueOrders
+      .filter((o) => {
+        const d = orderDateOf(o);
+        return d ? sameDay(d, today) : false;
+      })
+      .reduce((s, o) => s + (Number(o.total) || 0), 0);
+  }, [revenueOrders]);
+
   const orderCount = ordersInRange.length;
-  const customerCount = users.filter((u) => u.createdAt && dateInRange(toJsDate(u.createdAt)!, from, to)).length;
-  const returnsCount = returns.filter((r) => r.createdAt && dateInRange(toJsDate(r.createdAt)!, from, to)).length;
+
+  const customerCount = useMemo(
+    () => users.filter((u) => {
+      const d = u.createdAt as Date | null;
+      return d ? dateInRange(d, from, to) : false;
+    }).length,
+    [users, from, to]
+  );
+
+  const returnsCount = useMemo(
+    () => returns.filter((r) => {
+      const d = r.createdAt as Date | null;
+      return d ? dateInRange(d, from, to) : false;
+    }).length,
+    [returns, from, to]
+  );
 
   const aov = orderCount ? revenueTotal / Math.max(revenueOrders.length, 1) : 0;
 
-  // Orders by status
   const statusCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const o of ordersInRange) {
@@ -183,7 +231,6 @@ const AdminDashboard: React.FC = () => {
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [ordersInRange]);
 
-  // Sales timeline (per day)
   const days = range === '7d' ? 7 : 30;
   const timeline = useMemo(() => {
     const buckets: { label: string; date: Date; total: number }[] = [];
@@ -192,21 +239,35 @@ const AdminDashboard: React.FC = () => {
       buckets.push({ label: d.toLocaleDateString(), date: d, total: 0 });
     }
     for (const o of revenueOrders) {
-      const d = startOfDay(toJsDate(o.createdAt) || new Date());
+      const d0 = orderDateOf(o);
+      if (!d0) continue;
+      const d = startOfDay(d0);
       const b = buckets.find((x) => x.date.getTime() === d.getTime());
       if (b) b.total += Number(o.total) || 0;
     }
     return buckets;
   }, [revenueOrders, range]);
 
-  // Top products (by qty)
+  const timelineMax = useMemo(() => Math.max(...timeline.map((t) => t.total), 1), [timeline]);
+
+  // Inventory KPIs
+  const totalVariants = inventory.length;
+  const totalUnits = inventory.reduce((s, r) => s + (Number(r.stock) || 0), 0);
+  const lowStock = inventory.filter(r => r.stock > 0 && r.stock <= LOW_STOCK_THRESHOLD).length;
+  const outOfStock = inventory.filter(r => r.stock === 0).length;
+  const lowStockRows = useMemo(
+    () => inventory.filter(r => r.stock <= LOW_STOCK_THRESHOLD).sort((a, b) => a.stock - b.stock).slice(0, 8),
+    [inventory]
+  );
+
+  const getQty = (it: any) => Number(it.qty ?? it.quantity ?? it.count ?? 0) || 0;
   const topProducts = useMemo(() => {
     const qtyById = new Map<string, { name: string; qty: number }>();
     for (const o of ordersInRange) {
       const items: any[] = Array.isArray(o.items) ? o.items : [];
       for (const it of items) {
         const pid = String(it.productId ?? it.id ?? it.sku ?? it.name ?? 'unknown');
-        const qty = Number(it.qty ?? it.quantity ?? 0) || 0;
+        const qty = getQty(it);
         const name = String(it.name ?? pid);
         const curr = qtyById.get(pid) || { name, qty: 0 };
         curr.qty += qty;
@@ -220,10 +281,9 @@ const AdminDashboard: React.FC = () => {
   }, [ordersInRange]);
 
   const recentOrders = useMemo(
-    () =>
-      [...orders]
-        .sort((a, b) => (toJsDate(b.createdAt)?.getTime() || 0) - (toJsDate(a.createdAt)?.getTime() || 0))
-        .slice(0, 8),
+    () => [...orders]
+      .sort((a, b) => ((orderDateOf(b)?.getTime() || 0) - (orderDateOf(a)?.getTime() || 0)))
+      .slice(0, 8),
     [orders]
   );
 
@@ -253,23 +313,29 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      {/* KPI cards (with inventory) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
         <div className="rounded-xl border bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">Revenue ({range})</span>
+            <span className="text-sm text-gray-600">Sales</span>
             <TrendingUp className="h-5 w-5 text-purple-600" />
           </div>
-          <div className="mt-2 text-2xl font-bold">{currency(revenueTotal)}</div>
-          <div className="mt-2 text-xs text-gray-500">Today: {currency(revenueToday)}</div>
+          <div className="mt-2 text-2xl font-bold">{currency(grossSalesTotal)}</div>
+          <div className="mt-1 text-xs text-gray-500">Gross sales in range</div>
+          <div className="mt-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Revenue received</span>
+              <span className="font-semibold">{currency(revenueReceivedTotal)}</span>
+            </div>
+          </div>
           <div className="mt-3">
-            <Sparkline values={timeline.map((t) => t.total)} />
+            <Sparkline values={timeline.map(t => t.total)} />
           </div>
         </div>
 
         <div className="rounded-xl border bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">Orders ({range})</span>
+            <span className="text-sm text-gray-600">Orders</span>
             <ShoppingBag className="h-5 w-5 text-purple-600" />
           </div>
           <div className="mt-2 text-2xl font-bold">{orderCount}</div>
@@ -278,24 +344,40 @@ const AdminDashboard: React.FC = () => {
 
         <div className="rounded-xl border bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">New Customers ({range})</span>
+            <span className="text-sm text-gray-600">New Customers</span>
             <Users className="h-5 w-5 text-purple-600" />
           </div>
           <div className="mt-2 text-2xl font-bold">{customerCount}</div>
           <div className="mt-2 text-xs text-gray-500">Total Users: {users.length}</div>
         </div>
 
+        {/* Inventory KPI */}
         <div className="rounded-xl border bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">Returns ({range})</span>
+            <span className="text-sm text-gray-600">Inventory</span>
+            <Boxes className="h-5 w-5 text-purple-600" />
+          </div>
+          <div className="mt-2 text-2xl font-bold">{totalVariants}</div>
+          <div className="mt-1 text-xs text-gray-500">
+            Variants • Units: <span className="font-medium">{totalUnits}</span>
+          </div>
+          <div className="mt-3 text-sm flex items-center justify-between">
+            <span className="text-gray-600">Low / OOS</span>
+            <span className="font-semibold">{lowStock} / {outOfStock}</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-white p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">Returns</span>
             <Package className="h-5 w-5 text-purple-600" />
           </div>
           <div className="mt-2 text-2xl font-bold">{returnsCount}</div>
-          <div className="mt-2 text-xs text-gray-500">Products: {products.length}</div>
+          <div className="mt-2 text-xs text-gray-500">Catalog products: {products.length}</div>
         </div>
       </div>
 
-      {/* Middle row: Status & Sales timeline */}
+      {/* Middle row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="rounded-xl border bg-white p-4 lg:col-span-1">
           <div className="flex items-center justify-between mb-4">
@@ -315,9 +397,7 @@ const AdminDashboard: React.FC = () => {
                   <div className="h-2 w-full bg-gray-100 rounded">
                     <div
                       className="h-2 bg-purple-600 rounded"
-                      style={{
-                        width: `${(count / Math.max(orderCount, 1)) * 100}%`,
-                      }}
+                      style={{ width: `${(count / Math.max(orderCount, 1)) * 100}%` }}
                     />
                   </div>
                 </div>
@@ -336,8 +416,7 @@ const AdminDashboard: React.FC = () => {
           ) : (
             <div className="flex items-end gap-1 h-40">
               {timeline.map((t, i) => {
-                const max = Math.max(...timeline.map((x) => x.total), 1);
-                const pct = (t.total / max) * 100;
+                const pct = (t.total / timelineMax) * 100;
                 return (
                   <div key={i} className="flex-1">
                     <div
@@ -357,7 +436,7 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom row: Recent Orders & Top Products */}
+      {/* Bottom row: Recent Orders & Low stock */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="rounded-xl border bg-white p-4">
           <div className="flex items-center justify-between mb-3">
@@ -375,7 +454,7 @@ const AdminDashboard: React.FC = () => {
                       {o.orderNumber ? `#${o.orderNumber}` : o.orderCode ? o.orderCode : o.id.slice(0, 8)}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {(toJsDate(o.createdAt) || new Date()).toLocaleString()}
+                      {( (o.createdAt as Date) ?? (o.orderDate as Date) ?? new Date()).toLocaleString()}
                     </div>
                   </div>
                   <div className="text-right">
@@ -394,24 +473,30 @@ const AdminDashboard: React.FC = () => {
 
         <div className="rounded-xl border bg-white p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-800">Top Products</h2>
-            <span className="text-xs text-gray-500">{range === '7d' ? '7-day' : '30-day'}</span>
+            <h2 className="text-sm font-semibold text-gray-800">
+              Low Stock (≤ {LOW_STOCK_THRESHOLD})
+            </h2>
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
           </div>
-          {topProducts.length === 0 ? (
-            <div className="text-sm text-gray-500">No product sales in this range.</div>
+          {lowStockRows.length === 0 ? (
+            <div className="text-sm text-gray-500">All good. No low stock items.</div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left border-b">
-                  <th className="py-2 pr-2">Product</th>
+                  <th className="py-2 pr-2">Product ID</th>
+                  <th className="py-2 pr-2">Size</th>
                   <th className="py-2 pr-2 text-right">Qty</th>
                 </tr>
               </thead>
               <tbody>
-                {topProducts.map((p) => (
-                  <tr key={p.id} className="border-b last:border-0">
-                    <td className="py-2 pr-2">{p.name}</td>
-                    <td className="py-2 pr-2 text-right font-medium">{p.qty}</td>
+                {lowStockRows.map((r) => (
+                  <tr key={`${r.productId}_${r.size}`} className="border-b last:border-0">
+                    <td className="py-2 pr-2 truncate max-w-[10rem]" title={r.productId}>
+                      {r.productId}
+                    </td>
+                    <td className="py-2 pr-2">{r.size}</td>
+                    <td className="py-2 pr-2 text-right font-medium">{r.stock}</td>
                   </tr>
                 ))}
               </tbody>

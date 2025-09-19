@@ -13,6 +13,9 @@ import {
   setDefaultAddress,
 } from '../services/addresses';
 
+// ⬇️ inventory: atomic decrements to prevent oversell
+import { decrementBatch } from '../services/inventory';
+
 type AddressForm = Omit<Address, 'id'>;
 
 const emptyAddress: AddressForm = {
@@ -126,25 +129,18 @@ const CheckoutPage: React.FC = () => {
       setLoading(true);
       setPlacingOrder(true);
 
-      // 2) Save the new address if requested
-      if (!selectedSavedAddress && saveNewAddress) {
-        try {
-          const newId = await createAddress(currentUser.uid, {
-            ...effective!,
-            isDefault: makeDefault,
-          });
-          if (makeDefault) {
-            await setDefaultAddress(currentUser.uid, newId);
-          }
-          // Refresh list (optional)
-          const list = await getAddresses(currentUser.uid);
-          setSavedAddresses(list);
-          setSelectedAddressId(newId);
-        } catch (e) {
-          console.error('Could not save address:', e);
-          // don't block order placement
-        }
-      }
+      // ⬇️ 2) Atomically decrement inventory for each line-item.
+      //     Throws if any row would go negative or doesn't exist.
+      await decrementBatch(
+        cart.items.map((it) => {
+          if (!it.size) throw new Error('Missing size for an item in the cart.');
+          return {
+            productId: it.productId,
+            size: it.size,
+            qty: it.quantity ?? 1,
+          };
+        })
+      );
 
       // 3) Build order items (carry qty + price)
       const orderItems = cart.items.map((item) => {
@@ -239,7 +235,12 @@ const CheckoutPage: React.FC = () => {
                           />
                           <div className="text-sm">
                             <div className="font-medium text-gray-900">
-                              {a.name} {a.isDefault && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">Default</span>}
+                              {a.name}{' '}
+                              {a.isDefault && (
+                                <span className="ml-2 text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">
+                                  Default
+                                </span>
+                              )}
                             </div>
                             <div className="text-gray-600">{a.phone}</div>
                             <div className="text-gray-600">{a.addressLine1}</div>

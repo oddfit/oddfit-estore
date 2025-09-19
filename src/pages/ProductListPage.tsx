@@ -1,382 +1,156 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Filter, SortAsc, Grid, List, X } from 'lucide-react';
-import { Product, FilterOptions } from '../types';
-import { SIZES, COLORS_OPTIONS, PRICE_RANGES } from '../constants';
-import SearchBar from '../components/ui/SearchBar';
+import React, { useEffect, useMemo, useState } from 'react';
 import ProductCard from '../components/ui/ProductCard';
-import Button from '../components/ui/Button';
-import { useCategories } from '../hooks/useCategories';
 import { productsService } from '../services/firestore';
+import type { Product } from '../types';
+import Button from '../components/ui/Button';
 import { toJsDate } from '../hooks/useCategories';
 
+const FALLBACK =
+  'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
+
+type AnyProduct = Product & {
+  product_name?: string;
+  image_url?: string;
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+function normalize(doc: AnyProduct): Product {
+  const images = (() => {
+    const arr = Array.isArray(doc.images) ? doc.images : [];
+    const cleaned = arr
+      .map((s: any) => (typeof s === 'string' ? s.trim() : ''))
+      .filter(Boolean);
+    const single =
+      typeof doc.image_url === 'string' && doc.image_url.trim()
+        ? [doc.image_url.trim()]
+        : [];
+    const merged = Array.from(new Set([...cleaned, ...single]));
+    return merged.length ? merged : [FALLBACK];
+  })();
+
+  return {
+    id: doc.id,
+    name: (doc.name ?? doc.product_name ?? 'Untitled') as string,
+    description: (doc.description ?? '') as string,
+    price: Number(doc.price ?? 0),
+    images,
+    category: (doc.category ?? '') as string,
+    sizes: Array.isArray(doc.sizes) ? (doc.sizes as string[]) : [],
+    colors: Array.isArray(doc.colors) ? (doc.colors as string[]) : [],
+    stock: Number((doc as any).stock ?? 0), // legacy field if present (not used for quick add)
+    rating: Number((doc as any).rating ?? 0),
+    reviewCount: Number((doc as any).reviewCount ?? 0),
+    featured: Boolean((doc as any).featured ?? false),
+    createdAt: toJsDate((doc as any).createdAt) || new Date(),
+    updatedAt: toJsDate((doc as any).updatedAt) || new Date(),
+  };
+}
+
 const ProductListPage: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
-  const { categories } = useCategories();
-  
-  const [filters, setFilters] = useState<FilterOptions>({
-    category: searchParams.get('category') || undefined,
-    priceMin: undefined,
-    priceMax: undefined,
-    sizes: [],
-    colors: [],
-    sortBy: 'newest',
-  });
+  const [err, setErr] = useState('');
+  const [rows, setRows] = useState<Product[]>([]);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<'new' | 'priceAsc' | 'priceDesc'>('new');
 
-  // Fetch products from Firestore
   useEffect(() => {
-    const fetchProducts = async () => {
+    let alive = true;
+    (async () => {
       try {
+        setErr('');
         setLoading(true);
-        console.log('Fetching all products from Firestore...');
-        
-        const productsData = await productsService.getAll();
-        console.log('Raw products data:', productsData);
-        console.log('Number of products fetched:', productsData.length);
-        
-      // replace your toImages with this version
-      const toImages = (doc: any): string[] => {
-        const flat = (arr: any[]): string[] =>
-          Array.isArray(arr) ? (arr as any[]).flat ? (arr as any[]).flat(2) : arr.reduce<string[]>((acc, v) => acc.concat(Array.isArray(v) ? flat(v) : v), []) : [];
-
-        const fromArray = Array.isArray(doc.images) ? flat(doc.images) : [];
-        const cleanedArray = fromArray
-          .map((s) => (typeof s === 'string' ? s.trim() : ''))
-          .filter(Boolean);
-
-        const single =
-          typeof doc.image_url === 'string' && doc.image_url.trim()
-            ? [doc.image_url.trim()]
-            : [];
-
-        return Array.from(new Set([...cleanedArray, ...single]));
-      };
-
-        // Transform Firestore data to match Product interface
-        const transformedProducts = productsData.map((doc: any) => ({
-          id: doc.id,
-          name: doc.product_name,
-          description: doc.description || '',
-          price: doc.price || 0,
-          images: toImages(doc),
-          category: doc.category || '',
-          sizes: doc.sizes || [],
-          colors: doc.colors || [],
-          stock: doc.stock || 0,
-          rating: doc.rating || 0,
-          reviewCount: doc.reviewCount || 0,
-          featured: doc.featured || false,
-          createdAt: toJsDate(doc.createdAt) || new Date(),
-          updatedAt: toJsDate(doc.updatedAt) || new Date(),
-        }));
-        
-        console.log('Transformed products:', transformedProducts);
-        setProducts(transformedProducts);
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        setProducts([]);
+        const raw = (await productsService.getAll()) as AnyProduct[];
+        const list = raw.map(normalize);
+        if (!alive) return;
+        setRows(list);
+      } catch (e: any) {
+        console.error('Load products failed:', e);
+        if (!alive) return;
+        setErr(e?.message || 'Failed to load products.');
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
+    })();
+    return () => {
+      alive = false;
     };
-
-    fetchProducts();
   }, []);
 
-  // Apply filters
-  useEffect(() => {
-    let filtered = [...products];
-
-    // Category filter
-    if (filters.category) {
-      filtered = filtered.filter(product => product.category === filters.category);
-    }
-
-    // Price filter
-    if (filters.priceMin !== undefined) {
-      filtered = filtered.filter(product => product.price >= filters.priceMin!);
-    }
-    if (filters.priceMax !== undefined) {
-      filtered = filtered.filter(product => product.price <= filters.priceMax!);
-    }
-
-    // Size filter
-    if (filters.sizes && filters.sizes.length > 0) {
-      filtered = filtered.filter(product => 
-        product.sizes.some(size => filters.sizes!.includes(size))
-      );
-    }
-
-    // Color filter
-    if (filters.colors && filters.colors.length > 0) {
-      filtered = filtered.filter(product => 
-        product.colors.some(color => filters.colors!.includes(color))
-      );
-    }
-
-    // Sorting
-    switch (filters.sortBy) {
-      case 'price-asc':
-        filtered.sort((a, b) => a.price - b.price);
-        break;
-      case 'price-desc':
-        filtered.sort((a, b) => b.price - a.price);
-        break;
-      case 'rating':
-        filtered.sort((a, b) => b.rating - a.rating);
-        break;
-      case 'newest':
-      default:
-        filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        break;
-    }
-
-    setFilteredProducts(filtered);
-  }, [products, filters]);
-
-  const handleFilterChange = (newFilters: Partial<FilterOptions>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
-  };
-
-  const handleProductClick = (product: Product) => {
-    window.location.href = `/product/${product.id}`;
-  };
-
-
-  const clearFilters = () => {
-    setFilters({
-      category: undefined,
-      priceMin: undefined,
-      priceMax: undefined,
-      sizes: [],
-      colors: [],
-      sortBy: 'newest',
-    });
-    setSearchParams({});
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading products...</p>
-        </div>
-      </div>
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let arr = rows.filter((p) =>
+      q
+        ? (p.name || '').toLowerCase().includes(q) ||
+          (p.category || '').toLowerCase().includes(q)
+        : true
     );
-  }
+
+    if (sort === 'new') {
+      arr = arr.sort(
+        (a, b) =>
+          (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0)
+      );
+    } else if (sort === 'priceAsc') {
+      arr = arr.sort((a, b) => Number(a.price) - Number(b.price));
+    } else if (sort === 'priceDesc') {
+      arr = arr.sort((a, b) => Number(b.price) - Number(a.price));
+    }
+
+    return arr;
+  }, [rows, query, sort]);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {filters.category 
-                ? categories.find(c => c.id === filters.category)?.name || 'Products'
-                : 'All Products'
-              }
-            </h1>
-            <p className="text-gray-600 mt-2">
-              {filteredProducts.length} products found
-            </p>
-          </div>
+        <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">All Products</h1>
 
-          <div className="flex items-center space-x-4">
-            {/* View Mode Toggle */}
-            <div className="hidden md:flex items-center border border-gray-300 rounded-lg">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 ${viewMode === 'grid' ? 'bg-purple-100 text-purple-600' : 'text-gray-600'}`}
-              >
-                <Grid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 ${viewMode === 'list' ? 'bg-purple-100 text-purple-600' : 'text-gray-600'}`}
-              >
-                <List className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Sort */}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search products…"
+              className="flex-1 sm:w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+            />
             <select
-              value={filters.sortBy}
-              onChange={(e) => handleFilterChange({ sortBy: e.target.value as any })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as any)}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
             >
-              <option value="newest">Newest</option>
-              <option value="price-asc">Price: Low to High</option>
-              <option value="price-desc">Price: High to Low</option>
-              <option value="rating">Highest Rated</option>
+              <option value="new">Newest</option>
+              <option value="priceAsc">Price: Low → High</option>
+              <option value="priceDesc">Price: High → Low</option>
             </select>
-
-            {/* Filter Toggle */}
-            <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-              className="md:hidden"
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              Filters
+            <Button variant="outline" onClick={() => { setQuery(''); setSort('new'); }}>
+              Reset
             </Button>
           </div>
         </div>
 
-        <div className="flex gap-8">
-          {/* Filters Sidebar */}
-          <div className={`
-            w-80 space-y-6 flex-shrink-0
-            ${showFilters ? 'block' : 'hidden md:block'}
-          `}>
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Filters</h3>
-                <button
-                  onClick={clearFilters}
-                  className="text-sm text-purple-600 hover:text-purple-800"
-                >
-                  Clear All
-                </button>
-              </div>
-
-              {/* Categories */}
-              <div className="mb-6">
-                <h4 className="font-medium mb-3">Category</h4>
-                <div className="space-y-2">
-                  {categories.map(category => (
-                    <label key={category.id} className="flex items-center">
-                      <input
-                        type="radio"
-                        name="category"
-                        value={category.id}
-                        checked={filters.category === category.id}
-                        onChange={(e) => handleFilterChange({ 
-                          category: e.target.checked ? category.id : undefined 
-                        })}
-                        className="text-purple-600 focus:ring-purple-500"
-                      />
-                      <span className="ml-3 text-sm">{category.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Price Range */}
-              {/* <div className="mb-6">
-                <h4 className="font-medium mb-3">Price</h4>
-                <div className="space-y-2">
-                  {PRICE_RANGES.map((range, index) => (
-                    <label key={index} className="flex items-center">
-                      <input
-                        type="radio"
-                        name="price"
-                        checked={filters.priceMin === range.min && filters.priceMax === range.max}
-                        onChange={() => handleFilterChange({
-                          priceMin: range.min,
-                          priceMax: range.max === Infinity ? undefined : range.max
-                        })}
-                        className="text-purple-600 focus:ring-purple-500"
-                      />
-                      <span className="ml-3 text-sm">{range.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div> */}
-
-              {/* Sizes */}
-              <div className="mb-6">
-                <h4 className="font-medium mb-3">Size</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  {SIZES.map(size => (
-                    <label key={size} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        value={size}
-                        checked={filters.sizes?.includes(size) || false}
-                        onChange={(e) => {
-                          const newSizes = e.target.checked
-                            ? [...(filters.sizes || []), size]
-                            : (filters.sizes || []).filter(s => s !== size);
-                          handleFilterChange({ sizes: newSizes });
-                        }}
-                        className="text-purple-600 focus:ring-purple-500"
-                      />
-                      <span className="ml-2 text-sm">{size}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Colors
-              <div className="mb-6">
-                <h4 className="font-medium mb-3">Color</h4>
-                <div className="grid grid-cols-4 gap-3">
-                  {COLORS_OPTIONS.map(color => (
-                    <label key={color.name} className="flex flex-col items-center cursor-pointer">
-                      <div
-                        className={`w-8 h-8 rounded-full border-2 ${
-                          filters.colors?.includes(color.name)
-                            ? 'border-purple-600'
-                            : 'border-gray-300'
-                        }`}
-                        style={{ backgroundColor: color.value }}
-                      />
-                      <input
-                        type="checkbox"
-                        value={color.name}
-                        checked={filters.colors?.includes(color.name) || false}
-                        onChange={(e) => {
-                          const newColors = e.target.checked
-                            ? [...(filters.colors || []), color.name]
-                            : (filters.colors || []).filter(c => c !== color.name);
-                          handleFilterChange({ colors: newColors });
-                        }}
-                        className="hidden"
-                      />
-                      <span className="text-xs mt-1">{color.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div> */}
-            </div>
+        {err && (
+          <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+            {err}
           </div>
+        )}
 
-          {/* Products Grid */}
-          <div className="flex-1">
-            {filteredProducts.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500 text-lg">No products found matching your filters.</p>
-                <Button onClick={clearFilters} className="mt-4">
-                  Clear Filters
-                </Button>
-              </div>
-            ) : (
-              <div className={`
-                grid gap-6
-                ${viewMode === 'grid' 
-                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' 
-                  : 'grid-cols-1'
-                }
-              `}>
-                {filteredProducts.map(product => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onProductClick={handleProductClick}
-                  />
-                ))}
-              </div>
-            )}
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600" />
+            Loading…
           </div>
-        </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-sm text-gray-600 p-4 bg-white rounded-lg border">
+            No products found.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filtered.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

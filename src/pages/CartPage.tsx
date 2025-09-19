@@ -1,174 +1,269 @@
+// src/pages/CartPage.tsx
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
+import Button from '../components/ui/Button';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import Button from '../components/ui/Button';
+import { useProductAvailability } from '../hooks/useProductAvailability';
+
+const FALLBACK =
+  'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
 
 const CartPage: React.FC = () => {
-  const { cart, updateQuantity, removeFromCart, cartTotal, loading } = useCart();
+  // top-level hooks (always same order)
+  const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const {
+    cart,
+    cartTotal,
+    removeFromCart,
+    updateQuantity,
+    addToCart,
+    // optional; exists if you merged earlier change
+    // @ts-expect-error soft-detect
+    updateItemSize,
+  } = useCart() as any;
 
-  // Logged in means NOT anonymous
-  const isLoggedIn = !!currentUser && !currentUser.isAnonymous;
-  const checkoutHref = isLoggedIn ? '/checkout' : '/login?redirect=/checkout';
+  const items = cart?.items ?? [];
+  const subtotal = Number(cartTotal || 0);
+  const shippingFee = items.length > 0 ? 99 : 0;
+  const total = subtotal + shippingFee;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-      </div>
-    );
-  }
-
-  if (!cart || cart.items.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-          <div className="text-center">
-            <ShoppingBag className="mx-auto h-12 w-12 text-gray-400" />
-            <h2 className="mt-4 text-xl font-semibold text-gray-900">Your cart is empty</h2>
-            <p className="mt-2 text-gray-600">Start shopping to add items to your cart</p>
-            <Link to="/products" className="mt-4 inline-block">
-              <Button>Continue Shopping</Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const goCheckout = () => {
+    if (!currentUser || (currentUser as any)?.isAnonymous) {
+      navigate(`/login?redirect=/checkout`);
+    } else {
+      navigate('/checkout');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Shopping Cart</h1>
-          {currentUser?.isAnonymous && (
-            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800 text-sm">
-              You’re shopping as a guest. <Link className="underline" to="/login?redirect=/checkout">Verify your phone</Link> at checkout.
-            </div>
-          )}
-        <div className="lg:grid lg:grid-cols-12 lg:gap-x-12 lg:items-start">
-          {/* Cart Items */}
-          <div className="lg:col-span-7">
-            <div className="bg-white shadow-sm rounded-lg">
-              <ul className="divide-y divide-gray-200">
-                {cart.items.map((item) => (
-                  <li key={item.id} className="p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <img
-                          className="w-20 h-20 rounded-md object-cover"
-                          src={
-                            item.product?.images?.[0] ||
-                            (item.product as any)?.image_url ||
-                            'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg'
-                          }
-                          alt={item.product?.name ?? 'Cart item'}
-                        />
-                      </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">Your Cart</h1>
 
-                      <div className="ml-6 flex-1">
-                        <div className="flex">
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-medium text-gray-900">
-                              {item.product?.name}
-                            </h4>
-                            <p className="mt-1 text-sm text-gray-500">
-                              Size: {item.size} | Color: {item.color}
-                            </p>
-                            <p className="mt-1 text-sm font-medium text-gray-900">
-                              ₹{item.price.toFixed(2)}
-                            </p>
-                          </div>
-
-                          <div className="ml-4 flex-shrink-0 flow-root">
-                            <button
-                              type="button"
-                              onClick={() => removeFromCart(item.id)}
-                              className="text-gray-400 hover:text-red-500 transition-colors"
-                            >
-                              <Trash2 className="h-5 w-5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 flex items-center">
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            disabled={item.quantity <= 1}
-                            className={`flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 hover:bg-gray-50 ${
-                              item.quantity <= 1 ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                          >
-                            <Minus className="h-4 w-4" />
-                          </button>
-
-                          <span className="mx-4 text-sm font-medium">{item.quantity}</span>
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 hover:bg-gray-50"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </li>
+        {items.length === 0 ? (
+          <div className="rounded-lg border bg-white p-6 text-gray-600">
+            Your cart is empty.
+            <Button className="ml-3" onClick={() => navigate('/products')}>
+              Continue shopping
+            </Button>
+          </div>
+        ) : (
+          <div className="lg:grid lg:grid-cols-12 lg:gap-x-12">
+            {/* Items */}
+            <div className="lg:col-span-8">
+              <div className="space-y-4">
+                {items.map((item: any) => (
+                  <CartItemRow
+                    key={item.id}
+                    item={item}
+                    onRemove={removeFromCart}
+                    onQty={updateQuantity}
+                    onChangeSize={typeof updateItemSize === 'function' ? updateItemSize : undefined}
+                    addToCart={addToCart}
+                  />
                 ))}
-              </ul>
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="mt-8 lg:mt-0 lg:col-span-4">
+              <div className="rounded-lg border bg-white p-6">
+                <h2 className="text-lg font-medium text-gray-900 mb-4">
+                  Order Summary
+                </h2>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Subtotal</span>
+                    <span>₹{subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Shipping</span>
+                    <span>₹{shippingFee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-base font-semibold border-t pt-2">
+                    <span>Total</span>
+                    <span>₹{total.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <Button
+                  fullWidth
+                  size="lg"
+                  className="mt-6"
+                  onClick={goCheckout}
+                  disabled={items.length === 0}
+                >
+                  Checkout
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** Separate row component so we can safely use hooks per-item without breaking hook rules */
+const CartItemRow: React.FC<{
+  item: any;
+  onRemove: (id: string) => Promise<void> | void;
+  onQty: (id: string, qty: number) => Promise<void> | void;
+  onChangeSize?: (id: string, size: string) => Promise<void> | void; // optional direct update
+  addToCart: (product: any, size: string, color: string, qty?: number) => Promise<void>;
+}> = ({ item, onRemove, onQty, onChangeSize, addToCart }) => {
+  const product = item.product || {};
+  const productId: string = product?.id || item.productId;
+  const name: string = product?.name ?? product?.product_name ?? 'Product';
+  const sizes: string[] = Array.isArray(product?.sizes) ? product.sizes : [];
+  const images: string[] = Array.isArray(product?.images) ? product.images : [];
+  const firstImage = images[0] || (product as any)?.image_url || FALLBACK;
+
+  // per-row availability (safe to use hook here)
+  const { loading, stockBySize } = useProductAvailability(productId, sizes);
+
+  const sizeOptions = React.useMemo(() => {
+    return sizes.map((s) => {
+      const avail = Number(stockBySize?.[s] ?? 0);
+      return {
+        value: s,
+        label: s,
+        disabled: avail < Number(item.quantity ?? 1),
+        avail,
+      };
+    });
+  }, [sizes, stockBySize, item.quantity]);
+
+  const handleSizeChange = async (nextSize: string) => {
+    if (!nextSize) return;
+    const qty = Number(item.quantity ?? 1);
+    const available = Number(stockBySize?.[nextSize] ?? 0);
+    if (available < qty) {
+      alert(`Only ${available} in stock for size ${nextSize}. Reduce quantity first.`);
+      return;
+    }
+
+    try {
+      // Prefer direct in-place update if your CartContext exposes it
+      if (onChangeSize) {
+        await onChangeSize(item.id, nextSize);
+        return;
+      }
+      // Fallback: remove + re-add (preserves quantity)
+      await onRemove(item.id);
+      await addToCart(product, nextSize, item.color, qty);
+    } catch (e: any) {
+      console.error('Failed to change size:', e);
+      alert(e?.message || 'Could not change size. Please try again.');
+    }
+  };
+
+  return (
+    <div className="rounded-lg border bg-white p-4 flex gap-4 items-start">
+      <img
+        src={firstImage}
+        alt={name}
+        className="w-24 h-24 rounded-md object-cover"
+      />
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-medium text-gray-900 truncate">{name}</h3>
+            {product?.category && (
+              <div className="text-xs text-gray-500 mt-0.5">{product.category}</div>
+            )}
+          </div>
+          <div className="text-sm font-semibold text-gray-900">
+            ₹{Number(item.price ?? 0).toFixed(2)}
+          </div>
+        </div>
+
+        {/* Size + Color + Quantity */}
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Size selector (editable) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Size
+            </label>
+            {sizes.length === 0 ? (
+              <div className="text-sm text-gray-500">—</div>
+            ) : (
+              <select
+                value={item.size}
+                onChange={(e) => handleSizeChange(e.target.value)}
+                disabled={loading}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+                title={loading ? 'Checking availability…' : undefined}
+              >
+                {sizeOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+                    {opt.label}{opt.disabled ? ' — out of stock for this qty' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Color (read-only here) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Color
+            </label>
+            <div className="text-sm text-gray-800 border rounded-lg px-3 py-2 bg-gray-50">
+              {item.color || '—'}
             </div>
           </div>
 
-          {/* Order Summary */}
-          <div className="mt-16 lg:mt-0 lg:col-span-5">
-            <div className="bg-white shadow-sm rounded-lg p-6">
-              <h2 className="text-lg font-medium text-gray-900">Order Summary</h2>
-
-              <div className="mt-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600">Subtotal</p>
-                  <p className="text-sm font-medium text-gray-900">₹{cartTotal.toFixed(2)}</p>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600">Shipping</p>
-                  <p className="text-sm font-medium text-gray-900">₹99.00</p>
-                </div>
-
-                {/* <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600">Tax</p>
-                  <p className="text-sm font-medium text-gray-900">₹{(cartTotal * 0.18).toFixed(2)}</p>
-                </div> */}
-
-                <div className="border-t border-gray-200 pt-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-base font-medium text-gray-900">Order total</p>
-                    <p className="text-base font-medium text-gray-900">
-                      ₹{(cartTotal + 99 ).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
+          {/* Quantity */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Quantity
+            </label>
+            <div className="flex items-center">
+              <button
+                className="w-8 h-8 rounded-l-lg border border-gray-300 hover:bg-gray-50"
+                onClick={() =>
+                  onQty(item.id, Math.max(1, Number(item.quantity ?? 1) - 1))
+                }
+              >
+                –
+              </button>
+              <div className="w-10 text-center text-sm border-t border-b border-gray-300 py-1">
+                {item.quantity}
               </div>
-
-              <div className="mt-6">
-                <Link to={checkoutHref}>
-                  <Button fullWidth size="lg">Proceed to Checkout</Button>
-                </Link>
-              </div>
-
-              <div className="mt-6 text-center">
-                <p className="text-sm text-gray-500">or</p>
-                <Link
-                  to="/products"
-                  className="text-sm font-medium text-purple-600 hover:text-purple-500"
-                >
-                  Continue Shopping
-                </Link>
-              </div>
+              <button
+                className="w-8 h-8 rounded-r-lg border border-gray-300 hover:bg-gray-50"
+                onClick={() => {
+                  const avail = Number((stockBySize || {})[item.size] ?? 0);
+                  const next = Number(item.quantity ?? 1) + 1;
+                  if (avail > 0 && next > avail) {
+                    alert(`Only ${avail} in stock for size ${item.size}.`);
+                    return;
+                  }
+                  onQty(item.id, next);
+                }}
+              >
+                +
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Trash icon to delete */}
+      <button
+        aria-label="Remove item"
+        title="Remove"
+        onClick={() => onRemove(item.id)}
+        className="p-2 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200 transition"
+      >
+        <Trash2 className="h-5 w-5 text-gray-600" />
+      </button>
     </div>
   );
 };

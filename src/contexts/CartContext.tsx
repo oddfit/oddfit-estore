@@ -4,12 +4,19 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Cart, CartItem, Product } from '../types';
 import { useAuth } from './AuthContext';
+import { getStock } from '../services/inventory';
 
 interface CartContextType {
   cart: Cart | null;
-  addToCart: (product: Product, size: string, color: string, quantity?: number) => Promise<void>;
+  addToCart: (
+    product: Product,
+    size: string,
+    color: string,
+    quantity?: number
+  ) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
+  updateItemSize: (itemId: string, nextSize: string) => Promise<void>; // NEW
   clearCart: () => Promise<void>;
   cartItemCount: number;
   cartTotal: number;
@@ -49,7 +56,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updatedAt: d.updatedAt?.toDate?.() || new Date(),
         });
       } else {
-        // Try to seed from localStorage (same UID even for anon users)
+        // Seed from localStorage (same UID even for anon users)
         const ls = localStorage.getItem(`cart_${currentUser.uid}`);
         let items: CartItem[] = [];
         if (ls) {
@@ -67,7 +74,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }));
             }
           } catch {
-            // ignore parse errors and just start empty
+            // ignore parse errors
           }
         }
         const total = items.reduce((s, it) => s + it.price * it.quantity, 0);
@@ -141,10 +148,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { merge: true }
       );
       setCart(updated);
-      // also mirror to localStorage as a resilience fallback
+      // mirror to localStorage for resilience
       localStorage.setItem(`cart_${currentUser.uid}`, JSON.stringify(updated));
-    } catch (err) {
-      console.log('Firestore unavailable; persisting to localStorage only');
+    } catch {
+      // Firestore unavailable; persist to localStorage only
       try {
         localStorage.setItem(`cart_${currentUser.uid}`, JSON.stringify(updated));
         setCart(updated);
@@ -154,8 +161,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const recomputeTotal = (items: CartItem[]) =>
+    items.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 0), 0);
+
   // ----- Actions -----
-  const addToCart = async (product: Product, size: string, color: string, quantity = 1) => {
+  const addToCart = async (
+    product: Product,
+    size: string,
+    color: string,
+    quantity = 1
+  ) => {
     if (!currentUser) return;
 
     const base: Cart =
@@ -168,6 +183,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedAt: new Date(),
       };
 
+    // Merge with existing same (productId, size, color)
     const idx = base.items.findIndex(
       (it) => it.productId === product.id && it.size === size && it.color === color
     );
@@ -194,8 +210,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       items = [...base.items, newItem];
     }
 
-    const total = items.reduce((s, it) => s + it.price * it.quantity, 0);
-
+    const total = recomputeTotal(items);
     const updated: Cart = { ...base, items, total, updatedAt: new Date() };
     await saveCart(updated);
   };
@@ -204,7 +219,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser || !cart) return;
 
     const items = cart.items.filter((it) => it.id !== itemId);
-    const total = items.reduce((s, it) => s + it.price * it.quantity, 0);
+    const total = recomputeTotal(items);
 
     const updated: Cart = { ...cart, items, total, updatedAt: new Date() };
     await saveCart(updated);
@@ -219,8 +234,66 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const items = cart.items.map((it) => (it.id === itemId ? { ...it, quantity } : it));
-    const total = items.reduce((s, it) => s + it.price * it.quantity, 0);
+    const total = recomputeTotal(items);
 
+    const updated: Cart = { ...cart, items, total, updatedAt: new Date() };
+    await saveCart(updated);
+  };
+
+  // NEW: change the size of a cart line; merge with existing if same product/color/size exists
+  const updateItemSize = async (itemId: string, nextSize: string) => {
+    if (!currentUser || !cart) return;
+    const curr = cart.items.find((it) => it.id === itemId);
+    if (!curr) return;
+
+    // sanity
+    const next = String(nextSize || '').trim();
+    if (!next) return;
+
+    // optional safety: check inventory so we don't exceed stock
+    try {
+      const available = await getStock(curr.productId, next);
+      if (available < curr.quantity) {
+        throw new Error(
+          `Only ${available} in stock for size ${next}. Reduce quantity first.`
+        );
+      }
+    } catch (e) {
+      // If inventory read is locked down, skip the check; otherwise bubble up
+      const msg = (e as any)?.message || '';
+      if (!/Missing or insufficient permissions/i.test(msg)) {
+        // rethrow to let UI show an error toast/alert
+        throw e;
+      }
+    }
+
+    // merge if another line with same product/color/nextSize exists
+    const mergeIdx = cart.items.findIndex(
+      (it) =>
+        it.id !== itemId &&
+        it.productId === curr.productId &&
+        it.color === curr.color &&
+        it.size === next
+    );
+
+    let items: CartItem[];
+    if (mergeIdx >= 0) {
+      // combine quantities into the existing line
+      items = cart.items
+        .filter((it) => it.id !== itemId)
+        .map((it, i) =>
+          i === mergeIdx
+            ? { ...it, quantity: it.quantity + curr.quantity }
+            : it
+        );
+    } else {
+      // update size on the current line
+      items = cart.items.map((it) =>
+        it.id === itemId ? { ...it, size: next } : it
+      );
+    }
+
+    const total = recomputeTotal(items);
     const updated: Cart = { ...cart, items, total, updatedAt: new Date() };
     await saveCart(updated);
   };
@@ -243,13 +316,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCart(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.uid]); // key off uid changes (anon → linked phone keeps same UID, so still fine)
+  }, [currentUser?.uid]);
 
   const value: CartContextType = {
     cart,
     addToCart,
     removeFromCart,
     updateQuantity,
+    updateItemSize, // ← expose
     clearCart,
     cartItemCount,
     cartTotal,
