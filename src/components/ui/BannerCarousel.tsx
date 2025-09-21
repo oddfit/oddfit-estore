@@ -57,7 +57,7 @@ const BannerCarousel: React.FC<{ items: BannerItem[]; autoMs?: number }> = ({
                   </h2>
                 )}
                 {curr.subtitle && (
-                  <p className="mt-3 text-[#A35D95]/95 text-lg md:text-xl lg:text-2xl font-semibold drop-shadow">
+                  <p className="mt-3 text-[#d25c4d]/95 text-lg md:text-xl lg:text-2xl font-semibold drop-shadow">
                     {curr.subtitle}
                   </p>
                 )}
@@ -71,12 +71,25 @@ const BannerCarousel: React.FC<{ items: BannerItem[]; autoMs?: number }> = ({
           <div className="col-span-3" />
         </div>
 
-        {/* Mobile CTA (no overlay text for clarity) */}
-        {/* <div className="sm:hidden absolute bottom-4 left-0 right-0 flex justify-center">
-          <Link to="/products">
-            <Button>Shop</Button>
-          </Link>
-        </div> */}
+        {/* Mobile overlay: centered title, subtitle, and button */}
+        <div className="sm:hidden absolute inset-0 flex items-center justify-center px-5 text-center">
+          <div className="max-w-xs">
+            {curr.title && (
+              <h2 className="text-[#8e3b7f] text-2xl font-extrabold leading-tight drop-shadow">
+                {curr.title}
+              </h2>
+            )}
+            {curr.subtitle && (
+              <p className="mt-3 text-[#d25c4d]/95 text-lg md:text-xl lg:text-2xl font-semibold drop-shadow">
+                {curr.subtitle}
+              </p>
+            )}
+            <Link to="/products">
+              <Button className="mt-4">Shop</Button>
+            </Link>
+          </div>
+        </div>
+
       </div>
 
       {/* Dots */}
