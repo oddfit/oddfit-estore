@@ -185,10 +185,7 @@ const CheckoutPage: React.FC = () => {
       });
 
       const subtotal = cartTotal;
-      const shippingFee = useMemo(
-        () => computeShippingFee(subtotal, shippingMethod, shippingConfig),
-        [subtotal, shippingMethod, shippingConfig]
-      );
+      const shippingFee = computeShippingFee(subtotal, shippingMethod, shippingConfig);
       const total = subtotal + shippingFee;
 
       // 4) Create order with auto number

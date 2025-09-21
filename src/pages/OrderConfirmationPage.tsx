@@ -14,10 +14,14 @@ const OrderConfirmationPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<Order | (Order & any) | null>(null);
   const [loading, setLoading] = useState(true);
-  const shippingFee = Number(order?.extra?.shipping?.fee ?? 0);
-  const shippingMethod = String(order?.extra?.shipping?.method ?? 'standard');
-  const total = Number(order?.total ?? 0);
-  const subtotal = Math.max(0, total - shippingFee);
+  // Read shipping from root (new) or from extra.shipping (legacy)
+  const shipping: any =
+    (order as any)?.shipping ?? (order as any)?.extra?.shipping ?? {};
+  const shippingFee = Number(shipping?.fee ?? 0);
+  const shippingMethod = String(shipping?.method ?? 'standard');
+
+  // const total = Number(order?.total ?? 0);
+  // const subtotal = Math.max(0, total - shippingFee);
   
   useEffect(() => {
     const fetchOrder = async () => {
@@ -82,6 +86,8 @@ const OrderConfirmationPage: React.FC = () => {
     [items]
   );
 
+  const subtotal = derivedSubtotal;
+  const total = subtotal + shippingFee;
   const displayOrderCode =
     (order as any)?.orderCode ||
     (order as any)?.orderNumber ||
