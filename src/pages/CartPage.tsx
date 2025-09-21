@@ -6,6 +6,7 @@ import Button from '../components/ui/Button';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useProductAvailability } from '../hooks/useProductAvailability';
+import { getShippingConfig, computeShippingFee, DEFAULT_SHIPPING_CONFIG } from '../services/shipping';
 
 const FALLBACK =
   'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
@@ -25,9 +26,24 @@ const CartPage: React.FC = () => {
     updateItemSize,
   } = useCart() as any;
 
+  // shipping config for estimates in cart
+  const [shippingConfig, setShippingConfig] = React.useState(DEFAULT_SHIPPING_CONFIG);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const cfg = await getShippingConfig();
+        setShippingConfig(cfg);
+      } catch (e) {
+        console.error('Failed to load shipping config in cart:', e);
+      }
+    })();
+  }, []);
+
+
   const items = cart?.items ?? [];
   const subtotal = Number(cartTotal || 0);
-  const shippingFee = items.length > 0 ? 99 : 0;
+  const shippingFee = items.length > 0
+  ? computeShippingFee(subtotal, 'standard', shippingConfig) : 0;
   const total = subtotal + shippingFee;
 
   const goCheckout = () => {

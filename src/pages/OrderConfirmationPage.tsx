@@ -14,7 +14,11 @@ const OrderConfirmationPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<Order | (Order & any) | null>(null);
   const [loading, setLoading] = useState(true);
-
+  const shippingFee = Number(order?.extra?.shipping?.fee ?? 0);
+  const shippingMethod = String(order?.extra?.shipping?.method ?? 'standard');
+  const total = Number(order?.total ?? 0);
+  const subtotal = Math.max(0, total - shippingFee);
+  
   useEffect(() => {
     const fetchOrder = async () => {
       if (!orderId) return;
@@ -158,18 +162,27 @@ const OrderConfirmationPage: React.FC = () => {
               );
             })}
           </div>
-
-          {/* Total */}
-          <div className="border-t pt-4">
-            <div className="flex justify-between text-base font-medium">
-              <span>Total</span>
+          {/* Summary (Subtotal + Shipping + Total) */}
+          <div className="border-t pt-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Subtotal</span>
+              <span>₹{subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
               <span>
-                ₹{Number((order as any).total ?? derivedSubtotal).toFixed(2)}
+                Shipping
+                {shippingMethod
+                  ? ` (${shippingMethod.charAt(0).toUpperCase() + shippingMethod.slice(1)})`
+                  : ''}
               </span>
+              <span>₹{shippingFee.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-base font-semibold border-t pt-2">
+              <span>Total</span>
+              <span>₹{total.toFixed(2)}</span>
             </div>
           </div>
         </div>
-
         {/* Shipping Address */}
         {order.shippingAddress && (
           <div className="bg-white shadow-sm rounded-lg p-6 mb-8">

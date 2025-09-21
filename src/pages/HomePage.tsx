@@ -9,11 +9,17 @@ import { Sparkles } from "lucide-react";
 import { Ruler, Feather, Move, Receipt } from 'lucide-react';
 import { ReceiptText, IndianRupee } from 'lucide-react';
 import { useCategories, toJsDate } from '../hooks/useCategories';
+import BannerCarousel from '../components/ui/BannerCarousel';
+import { listActiveBanners } from '../services/banners';
+
 const HomePage: React.FC = () => {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const { categories, loading: categoriesLoading } = useCategories();
-
+  const [banners, setBanners] = useState<any[]>([]);
+  useEffect(() => {
+    (async () => setBanners(await listActiveBanners()))();
+  }, []);
   // Fetch featured products from Firestore
   useEffect(() => {
     const fetchFeaturedProducts = async () => {
@@ -91,20 +97,28 @@ const ReceiptINR = ({ className = 'h-7 w-7 text-[#d25c4d]' }) => (
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
-      <section className="relative">
-        <div
-          className="
-            h-[38vh] sm:h-[46vh] md:h-[60vh] lg:h-[72vh]
-            bg-cover bg-top
-          "
-          style={{
-            backgroundImage:
-              "url('https://firebasestorage.googleapis.com/v0/b/oddfit-2cce7.firebasestorage.app/o/assets%2Fbanner%2Fbanner_desktop.png?alt=media&token=f2c97979-98fa-469c-bbe3-f56721b9f6b0')",
-          }}
-          aria-label="OddFit hero"
-          role="img"
-        />
-      </section>
+      {/* Hero / Banner Section */}
+      {banners.length > 0 ? (
+        <section className="mb-6 md:mb-8">
+          <BannerCarousel items={banners} />
+        </section>
+      ) : (
+        <section className="relative mb-6 md:mb-8">
+          <div
+            className="
+              h-[38vh] sm:h-[46vh] md:h-[60vh] lg:h-[72vh]
+              bg-top
+            "
+            style={{
+              backgroundImage:
+                "url('https://firebasestorage.googleapis.com/v0/b/oddfit-2cce7.firebasestorage.app/o/assets%2Fbanner%2Fbanner_desktop.png?alt=media&token=f2c97979-98fa-469c-bbe3-f56721b9f6b0')",
+            }}
+            aria-label="OddFit hero"
+            role="img"
+          />
+        </section>
+      )}
+
       
       {/* Categories Section */}
       <section className="py-16">

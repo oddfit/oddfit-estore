@@ -38,6 +38,7 @@ import AdminReturns from './pages/AdminReturns';
 import AddressesPage from './pages/AddressesPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminInventory from './pages/AdminInventory';
+import AdminBanners from './pages/AdminBanners';
 
 const AppContent: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -91,6 +92,7 @@ const AppContent: React.FC = () => {
             <Route index element={<AdminDashboard />} />
 
             {/* Other admin sections */}
+            <Route path="banners" element={<AdminBanners />} />
             <Route path="products" element={<AdminProducts />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="customers" element={<AdminCustomers />} />

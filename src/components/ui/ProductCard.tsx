@@ -4,6 +4,8 @@ import type { Product } from '../../types';
 import Button from '../ui/Button';
 import { useCart } from '../../contexts/CartContext';
 import { useProductAvailability } from '../../hooks/useProductAvailability';
+import { useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 const FALLBACK =
   'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
@@ -16,6 +18,9 @@ type Props = {
 const ProductCard: React.FC<Props> = ({ product, className }) => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { currentUser } = useAuth();
+  const location = useLocation();
+
 
   // Normalize common fields that might come as snake_case from Firestore
   const name: string =
@@ -53,6 +58,15 @@ const ProductCard: React.FC<Props> = ({ product, className }) => {
   const onQuickAdd = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!canQuickAdd) return;
+
+    // ↪ if not logged in (or anonymous), send to login and keep current page as redirect
+    const isAnon = !currentUser || (currentUser as any)?.isAnonymous;
+    if (isAnon) {
+      const redirect = location.pathname + location.search + location.hash;
+      navigate(`/login?redirect=${encodeURIComponent(redirect)}`);
+      return;
+    }
+
     await addToCart(product, firstInStockSize!, defaultColor, 1);
   };
 

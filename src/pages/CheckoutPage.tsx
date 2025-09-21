@@ -12,6 +12,8 @@ import {
   createAddress,
   setDefaultAddress,
 } from '../services/addresses';
+import { getShippingConfig, computeShippingFee, DEFAULT_SHIPPING_CONFIG } from '../services/shipping';
+
 
 // ⬇️ inventory: atomic decrements to prevent oversell
 import { decrementBatch } from '../services/inventory';
@@ -51,6 +53,8 @@ const CheckoutPage: React.FC = () => {
   const [makeDefault, setMakeDefault] = useState(true);
 
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi' | 'cod'>('card');
+  const [shippingMethod, setShippingMethod] = useState<'standard' | 'express'>('standard');
+  const [shippingConfig, setShippingConfig] = useState(DEFAULT_SHIPPING_CONFIG);
 
   // Force login if anonymous/guest
   useEffect(() => {
@@ -86,6 +90,26 @@ const CheckoutPage: React.FC = () => {
       }
     })();
   }, [currentUser]);
+
+  // Load shipping config from Firestore (with fallback defaults)
+  useEffect(() => {
+    (async () => {
+      try {
+        const cfg = await getShippingConfig();
+        setShippingConfig(cfg);
+      } catch (e) {
+        console.error('Failed to load shipping config, using defaults', e);
+      }
+    })();
+  }, []);
+
+  // If the cart qualifies for free shipping, disable Express and force Standard
+  useEffect(() => {
+    if (cartTotal >= shippingConfig.freeThreshold && shippingMethod === 'express') {
+      setShippingMethod('standard');
+    }
+  }, [cartTotal, shippingConfig.freeThreshold, shippingMethod]);
+
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -161,7 +185,10 @@ const CheckoutPage: React.FC = () => {
       });
 
       const subtotal = cartTotal;
-      const shippingFee = 99;
+      const shippingFee = useMemo(
+        () => computeShippingFee(subtotal, shippingMethod, shippingConfig),
+        [subtotal, shippingMethod, shippingConfig]
+      );
       const total = subtotal + shippingFee;
 
       // 4) Create order with auto number
@@ -182,6 +209,10 @@ const CheckoutPage: React.FC = () => {
           billingAddress: effective!,
           orderDate: new Date(),
           estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          shipping: {
+            method: shippingMethod,    // 'standard' | 'express'
+            fee: shippingFee,          // computed above
+          },
         },
       });
 
@@ -197,7 +228,10 @@ const CheckoutPage: React.FC = () => {
   };
 
   const subtotal = cartTotal;
-  const shippingFee = 99;
+  const shippingFee = useMemo(
+    () => computeShippingFee(subtotal, shippingMethod, shippingConfig),
+    [subtotal, shippingMethod, shippingConfig]
+  );
   const total = subtotal + shippingFee;
 
   return (
@@ -391,6 +425,52 @@ const CheckoutPage: React.FC = () => {
                   </label> */}
                 </div>
               </div>
+              {/* Shipping Method */}
+              <div className="bg-white shadow-sm rounded-lg p-6">
+                <div className="flex items-center mb-4">
+                  <h2 className="text-lg font-medium text-gray-900">Shipping Method</h2>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <label className="flex items-center justify-between border rounded-lg p-3">
+                    <span className="flex items-center">
+                      <input
+                        type="radio"
+                        name="ship"
+                        value="standard"
+                        checked={shippingMethod === 'standard'}
+                        onChange={() => setShippingMethod('standard')}
+                        className="text-purple-600 focus:ring-purple-500"
+                      />
+                      <span className="ml-3">Standard</span>
+                    </span>
+                    <span className="font-medium">
+                      ₹{computeShippingFee(subtotal, 'standard', shippingConfig).toFixed(2)}
+                    </span>
+                  </label>
+                  <label
+                    className={`flex items-center justify-between border rounded-lg p-3 ${
+                      subtotal >= shippingConfig.freeThreshold ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    <span className="flex items-center">
+                      <input
+                        type="radio"
+                        name="ship"
+                        value="express"
+                        checked={shippingMethod === 'express'}
+                        onChange={() => setShippingMethod('express')}
+                        className="text-purple-600 focus:ring-purple-500"
+                        disabled={subtotal >= shippingConfig.freeThreshold}
+                      />
+                      <span className="ml-3">Express</span>
+                    </span>
+                    <span className="font-medium">
+                      ₹{computeShippingFee(subtotal, 'express', shippingConfig).toFixed(2)}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
             </div>
           </div>
 

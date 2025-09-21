@@ -23,6 +23,8 @@ import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import Button from '../components/ui/Button';
 import { toJsDate } from '../hooks/useCategories';
+import { isInWishlist, toggleWishlistForProduct } from '../services/wishlist';
+
 
 const FALLBACK =
   'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
@@ -50,6 +52,7 @@ const ProductDetailPage: React.FC = () => {
   const [quantity, setQuantity] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [inWishlist, setInWishlist] = useState(false);
 
   // FAQ-like collapsibles
   const [open, setOpen] = useState<{ [key: string]: boolean }>({
@@ -149,6 +152,18 @@ const ProductDetailPage: React.FC = () => {
     fetchProduct();
   }, [id]);
 
+  useEffect(() => {
+    (async () => {
+      if (!product || !currentUser) { setInWishlist(false); return; }
+      try {
+        const ok = await isInWishlist(currentUser.uid, product.id);
+        setInWishlist(ok);
+      } catch {
+        setInWishlist(false);
+      }
+    })();
+  }, [product?.id, currentUser?.uid]);
+
   // Fetch inventory for this product (size-level)
   useEffect(() => {
     (async () => {
@@ -235,6 +250,22 @@ const ProductDetailPage: React.FC = () => {
       console.error('Error adding to cart:', error);
     } finally {
       setAddingToCart(false);
+    }
+  };
+
+  const onToggleWishlist = async () => {
+    const isAnon = !currentUser || (currentUser as any)?.isAnonymous;
+    if (isAnon) {
+      const redirect = location.pathname + location.search + location.hash;
+      navigate(`/login?redirect=${encodeURIComponent(redirect)}`);
+      return;
+    }
+    try {
+      const nowIn = await toggleWishlistForProduct(currentUser!.uid, product);
+      setInWishlist(nowIn);
+    } catch (e) {
+      console.error('Wishlist toggle failed', e);
+      alert('Could not update wishlist. Please try again.');
     }
   };
 
@@ -552,9 +583,18 @@ const ProductDetailPage: React.FC = () => {
                 <ShoppingCart className="h-5 w-5 mr-2" />
                 {canQuickAdd ? 'Add to Cart' : 'Out of Stock'}
               </Button>
-              <button className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" title="Add to wishlist">
-                <Heart className="h-6 w-6 text-gray-600" />
-              </button>
+                <button
+                  onClick={onToggleWishlist}
+                  aria-pressed={inWishlist}
+                  className={`p-3 border rounded-lg transition-colors ${
+                    inWishlist
+                      ? 'border-rose-300 bg-rose-50'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                  title={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+                >
+                  <Heart className={`h-6 w-6 ${inWishlist ? 'fill-rose-600 text-rose-600' : 'text-gray-600'}`} />
+                </button>
             </div>
 
             {/* Features (shipping/returns/security) */}
