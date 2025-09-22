@@ -4,6 +4,7 @@ import { productsService } from '../services/firestore';
 import type { Product } from '../types';
 import Button from '../components/ui/Button';
 import { toJsDate } from '../hooks/useCategories';
+import { useLocation } from 'react-router-dom'
 
 const FALLBACK =
   'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
@@ -54,13 +55,24 @@ const ProductListPage: React.FC = () => {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'new' | 'priceAsc' | 'priceDesc'>('new');
 
+  // Read ?category=slug from the URL (e.g. /products?category=kurti)
+  const { search } = useLocation();
+  const categoryParam = useMemo(() => {
+    const v = new URLSearchParams(search).get('category');
+    return (v || '').toLowerCase();
+  }, [search]);
+
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         setErr('');
         setLoading(true);
-        const raw = (await productsService.getAll()) as AnyProduct[];
+        const raw = (categoryParam
+          ? await productsService.query([
+              { field: 'category', operator: '==', value: categoryParam },
+            ])
+          : await productsService.getAll()) as AnyProduct[];
         const list = raw.map(normalize);
         if (!alive) return;
         setRows(list);
@@ -75,7 +87,7 @@ const ProductListPage: React.FC = () => {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [categoryParam]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -85,6 +97,13 @@ const ProductListPage: React.FC = () => {
           (p.category || '').toLowerCase().includes(q)
         : true
     );
+
+    // Enforce category filter from URL on the client too (defensive)
+    if (categoryParam) {
+       arr = arr.filter(
+         (p) => (p.category || '').toLowerCase() === categoryParam
+       );
+     }
 
     if (sort === 'new') {
       arr = arr.sort(

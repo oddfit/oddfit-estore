@@ -36,9 +36,16 @@ type SequenceDoc = {
 function makeService(collectionName: string) {
   return {
     async getAll() {
-      const q = fsQuery(collection(db, collectionName), orderBy('createdAt', 'desc'));
-      const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Fetch without Firestore ordering to avoid index/type issues
+      const snap = await getDocs(collection(db, collectionName));
+      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Safe client-side sort by createdAt (Timestamp | Date | missing)
+      const toMs = (v: any) =>
+        v?.toMillis?.() ?? (v instanceof Date ? v.getTime() : 0);
+      rows.sort((a: any, b: any) => toMs(b.createdAt) - toMs(a.createdAt));
+
+      return rows;
     },
     async getById(id: string) {
       const ref = doc(db, collectionName, id);

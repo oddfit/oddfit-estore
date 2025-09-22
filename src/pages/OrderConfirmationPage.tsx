@@ -1,8 +1,8 @@
 // src/pages/OrderConfirmationPage.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { CheckCircle, Truck, MapPin } from 'lucide-react';
-import { ordersService } from '../services/firestore';
+import { CheckCircle, Truck, MapPin, RotateCcw } from 'lucide-react';
+import { ordersService, returnsService } from '../services/firestore';
 import { Order } from '../types';
 import Button from '../components/ui/Button';
 import { toJsDate } from '../hooks/useCategories';
@@ -10,19 +10,26 @@ import { toJsDate } from '../hooks/useCategories';
 const FALLBACK =
   'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
 
+type ReturnRow = {
+  id: string;
+  orderId?: string;
+  raCode?: string;
+  status?: 'requested' | 'approved' | 'rejected' | 'received' | 'refunded';
+  createdAt?: Date | null;
+};
+
 const OrderConfirmationPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<Order | (Order & any) | null>(null);
+  const [latestReturn, setLatestReturn] = useState<ReturnRow | null>(null);
   const [loading, setLoading] = useState(true);
-  // Read shipping from root (new) or from extra.shipping (legacy)
-  const shipping: any =
-    (order as any)?.shipping ?? (order as any)?.extra?.shipping ?? {};
-  const shippingFee = Number(shipping?.fee ?? 0);
-  const shippingMethod = String(shipping?.method ?? 'standard');
 
-  // const total = Number(order?.total ?? 0);
-  // const subtotal = Math.max(0, total - shippingFee);
-  
+  // derived amounts (robust to shapes)
+  const shippingFee = Number(order?.extra?.shipping?.fee ?? order?.shippingFee ?? 0);
+  const shippingMethod = String(order?.extra?.shipping?.method ?? order?.shippingMethod ?? 'standard');
+  const total = Number(order?.total ?? 0);
+  const subtotal = Math.max(0, total - shippingFee);
+
   useEffect(() => {
     const fetchOrder = async () => {
       if (!orderId) return;
@@ -30,21 +37,35 @@ const OrderConfirmationPage: React.FC = () => {
         setLoading(true);
         const data: any = await ordersService.getById(orderId);
         if (data) {
-          // Normalize timestamps safely
           const normalized = {
             ...data,
             id: data.id,
             orderDate: toJsDate(data.orderDate) || new Date(),
-            estimatedDelivery: data.estimatedDelivery
-              ? toJsDate(data.estimatedDelivery)
-              : undefined,
-            actualDelivery: data.actualDelivery
-              ? toJsDate(data.actualDelivery)
-              : undefined,
+            estimatedDelivery: data.estimatedDelivery ? toJsDate(data.estimatedDelivery) : undefined,
+            actualDelivery: data.actualDelivery ? toJsDate(data.actualDelivery) : undefined,
             createdAt: toJsDate(data.createdAt) || new Date(),
             updatedAt: toJsDate(data.updatedAt) || new Date(),
           };
           setOrder(normalized as Order);
+        }
+
+        // fetch returns tied to this order (by order doc id)
+        const rs = await returnsService.query([{ field: 'orderId', operator: '==', value: orderId }]);
+        if (rs && rs.length) {
+          rs.sort(
+            (a: any, b: any) =>
+              (toJsDate(b.createdAt)?.getTime?.() || 0) - (toJsDate(a.createdAt)?.getTime?.() || 0)
+          );
+          const r = rs[0];
+          setLatestReturn({
+            id: r.id,
+            orderId: r.orderId,
+            raCode: r.raCode,
+            status: r.status,
+            createdAt: toJsDate(r.createdAt) || null,
+          });
+        } else {
+          setLatestReturn(null);
         }
       } catch (err) {
         console.error('Error fetching order:', err);
@@ -56,7 +77,7 @@ const OrderConfirmationPage: React.FC = () => {
     fetchOrder();
   }, [orderId]);
 
-  // Helpers to handle various item shapes
+  // Normalize items so both array and object shapes render fine
   const items: any[] = useMemo(() => {
     if (!order?.items) return [];
     return Array.isArray(order.items) ? order.items : Object.values(order.items);
@@ -76,22 +97,29 @@ const OrderConfirmationPage: React.FC = () => {
 
   const getItemImage = (it: any) =>
     it?.image ||
+    it?.images?.[0] ||
     it?.product?.images?.[0] ||
     (it?.product as any)?.image_url ||
+    it?.image_url ||
     FALLBACK;
 
-  const derivedSubtotal = useMemo(
-    () =>
-      items.reduce((sum, it) => sum + getItemQty(it) * getItemPrice(it), 0),
-    [items]
-  );
-
-  const subtotal = derivedSubtotal;
-  const total = subtotal + shippingFee;
   const displayOrderCode =
     (order as any)?.orderCode ||
     (order as any)?.orderNumber ||
     order?.id;
+
+  // tracking fields (robust to different shapes)
+  const trackingNumber =
+    (order as any)?.trackingNumber ??
+    (order as any)?.extra?.trackingNumber ??
+    (order as any)?.extra?.tracking?.number ??
+    null;
+
+  const trackingUrl =
+    (order as any)?.trackingUrl ??
+    (order as any)?.extra?.trackingUrl ??
+    (order as any)?.extra?.tracking?.url ??
+    null;
 
   if (loading) {
     return (
@@ -124,15 +152,13 @@ const OrderConfirmationPage: React.FC = () => {
           <p className="mt-2 text-lg text-gray-600">
             Thank you for your purchase. Your order has been placed successfully.
           </p>
+          <p className="mt-1 text-sm text-gray-500">Order #{String(displayOrderCode)}</p>
         </div>
 
         {/* Order Details */}
         <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
           <div className="border-b pb-4 mb-4">
             <h2 className="text-lg font-medium text-gray-900">Order Details</h2>
-            <p className="text-sm text-gray-600">
-              Order #{String(displayOrderCode)}
-            </p>
             <p className="text-sm text-gray-600">
               Placed on {new Date(order.orderDate as any).toLocaleDateString()}
             </p>
@@ -168,7 +194,8 @@ const OrderConfirmationPage: React.FC = () => {
               );
             })}
           </div>
-          {/* Summary (Subtotal + Shipping + Total) */}
+
+          {/* Summary */}
           <div className="border-t pt-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span>Subtotal</span>
@@ -189,6 +216,7 @@ const OrderConfirmationPage: React.FC = () => {
             </div>
           </div>
         </div>
+
         {/* Shipping Address */}
         {order.shippingAddress && (
           <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
@@ -218,13 +246,13 @@ const OrderConfirmationPage: React.FC = () => {
           </div>
         )}
 
-        {/* Delivery Info */}
+        {/* Delivery / Tracking */}
         <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
           <div className="flex items-center mb-4">
             <Truck className="h-5 w-5 text-gray-400 mr-2" />
             <h3 className="text-lg font-medium text-gray-900">Delivery Information</h3>
           </div>
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gray-600 space-y-1">
             {(order as any).status && (
               <p>
                 <span className="font-medium">Status:</span>{' '}
@@ -237,14 +265,52 @@ const OrderConfirmationPage: React.FC = () => {
                 {new Date((order as any).estimatedDelivery).toLocaleDateString()}
               </p>
             )}
-            {(order as any).trackingNumber && (
+            {(trackingNumber || trackingUrl) && (
               <p>
-                <span className="font-medium">Tracking Number:</span>{' '}
-                {(order as any).trackingNumber}
+                <span className="font-medium">Tracking:</span>{' '}
+                {trackingNumber ? <span className="mr-2">{String(trackingNumber)}</span> : null}
+                {trackingUrl ? (
+                  <a
+                    href={String(trackingUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-purple-600 hover:underline"
+                  >
+                    Track shipment →
+                  </a>
+                ) : null}
               </p>
             )}
           </div>
         </div>
+
+        {/* Return Authorization (if any) */}
+        {latestReturn && (
+          <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
+            <div className="flex items-center mb-4">
+              <RotateCcw className="h-5 w-5 text-gray-400 mr-2" />
+              <h3 className="text-lg font-medium text-gray-900">Return Authorization</h3>
+            </div>
+            <div className="text-sm text-gray-600">
+              <p>
+                <span className="font-medium">Return #:</span>{' '}
+                {latestReturn.raCode || latestReturn.id}
+              </p>
+              {latestReturn.status && (
+                <p>
+                  <span className="font-medium">Status:</span>{' '}
+                  <span className="capitalize">{latestReturn.status}</span>
+                </p>
+              )}
+              {latestReturn.createdAt && (
+                <p>
+                  <span className="font-medium">Created:</span>{' '}
+                  {latestReturn.createdAt.toLocaleString()}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center">

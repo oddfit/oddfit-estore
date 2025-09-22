@@ -75,7 +75,7 @@ const AdminCategories: React.FC = () => {
     if (!form.name.trim()) return alert('Category name is required.');
 
     try {
-      await categoriesService.create({
+      await AdminCategoriesService.create({
         name: form.name.trim(),
         image_url: form.image_url.trim(),
         sizes: parseCsv(form.sizesCsv),
@@ -95,7 +95,7 @@ const AdminCategories: React.FC = () => {
   const handleUpdate = async () => {
     if (!editing) return;
     try {
-      await categoriesService.update(editing.id, {
+      await AdminCategoriesService.update(editing.id, {
         name: editForm.name.trim(),
         image_url: editForm.image_url.trim(),
         sizes: parseCsv(editForm.sizesCsv),
@@ -114,7 +114,7 @@ const AdminCategories: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this category?')) return;
     try {
-      await categoriesService.delete(id);
+      await AdminCategoriesService.delete(id);
       await fetchAll();
     } catch (e: any) {
       alert(e?.message || 'Delete failed.');

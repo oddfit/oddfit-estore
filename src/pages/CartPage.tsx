@@ -218,7 +218,7 @@ const CartItemRow: React.FC<{
               >
                 {sizeOptions.map((opt) => (
                   <option key={opt.value} value={opt.value} disabled={opt.disabled}>
-                    {opt.label}{opt.disabled ? ' — out of stock for this qty' : ''}
+                    {opt.label}{opt.disabled ? ' —> out of stock' : ''}
                   </option>
                 ))}
               </select>

@@ -53,11 +53,11 @@ const Footer: React.FC = () => {
                   Short Top Collection
                 </Link>
               </li>
-              <li>
+              {/* <li>
                 <Link to="/products?category=co_ord" className="text-gray-300 hover:text-white transition-colors">
                   Co-Ord Sets Collection
                 </Link>
-              </li>
+              </li> */}
               <li>
                 <Link to="/products?featured=true" className="text-gray-300 hover:text-white transition-colors">
                   Featured Items
