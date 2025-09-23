@@ -1,209 +1,323 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Package, Eye } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { ordersService } from '../services/firestore';
-import { Order } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Save, Trash2, Pencil, RefreshCcw } from 'lucide-react';
 import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import { productsService } from '../services/firestore';
+import { getByProduct, upsert, removeInventory } from '../services/inventory';
 import { toJsDate } from '../hooks/useCategories';
 
-const FALLBACK =
-  'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
+type ProductMeta = {
+  id: string;
+  name: string;
+  sizes: string[];
+};
 
-const OrdersPage: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { currentUser } = useAuth();
+type Row = {
+  productId: string;
+  size: string;
+  stock: number;
+  updatedAt?: Date | null;
+};
 
+const canonicalizeSizes = (raw: any): string[] => {
+  // Accept a variety of field shapes and normalize
+  let arr: string[] = [];
+  if (Array.isArray(raw)) arr = raw;
+  // fallback keys commonly used
+  if (!arr.length && Array.isArray((raw as any)?.sizes)) arr = (raw as any).sizes;
+  if (!arr.length && Array.isArray((raw as any)?.sizeOptions)) arr = (raw as any).sizeOptions;
+  if (!arr.length && Array.isArray((raw as any)?.size)) arr = (raw as any).size;
+
+  return arr
+    .map((s: any) => String(s ?? '').trim())
+    .filter(Boolean);
+};
+
+const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+const orderIndex = (s: string) => {
+  const i = sizeOrder.indexOf(s.toUpperCase());
+  return i === -1 ? 999 : i;
+};
+
+const AdminInventory: React.FC = () => {
+  const [products, setProducts] = useState<ProductMeta[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  // form state
+  const [form, setForm] = useState<{ size: string; qty: number }>({ size: '', qty: 0 });
+  const [editing, setEditing] = useState<{ size: string } | null>(null);
+
+  const selectedProduct: ProductMeta | undefined = useMemo(
+    () => products.find((p) => p.id === selectedProductId),
+    [products, selectedProductId]
+  );
+
+  const availableSizes = selectedProduct?.sizes ?? [];
+
+  const sortedRows = useMemo(() => {
+    // Prefer product’s declared size order if present; otherwise fallback to canonical order
+    if (availableSizes.length) {
+      const index = (s: string) => {
+        const i = availableSizes.indexOf(s);
+        return i === -1 ? 999 : i;
+      };
+      return [...rows].sort((a, b) => index(a.size) - index(b.size));
+    }
+    return [...rows].sort((a, b) => orderIndex(a.size) - orderIndex(b.size));
+  }, [rows, availableSizes]);
+
+  // load product list
   useEffect(() => {
-    const fetchOrders = async () => {
-      if (!currentUser) return;
-
+    (async () => {
+      setErr('');
       try {
-        setLoading(true);
-        // Get all orders for the user (no composite index needed)
-        const ordersData = await ordersService.query(
-          [{ field: 'userId', operator: '==', value: currentUser.uid }]
-        );
-
-        const transformedOrders = ordersData.map((doc: any) => ({
-          id: doc.id,
-          userId: doc.userId,
-          items: doc.items,
-          total: doc.total,
-          status: doc.status,
-          paymentMethod: doc.paymentMethod,
-          shippingAddress: doc.shippingAddress,
-          billingAddress: doc.billingAddress,
-          orderDate: toJsDate(doc.orderDate) || new Date(),
-          estimatedDelivery: doc.estimatedDelivery ? toJsDate(doc.estimatedDelivery) : undefined,
-          actualDelivery: doc.actualDelivery ? toJsDate(doc.actualDelivery) : undefined,
-          trackingNumber: doc.trackingNumber,
-          createdAt: toJsDate(doc.createdAt) || new Date(),
-          updatedAt: toJsDate(doc.updatedAt) || new Date(),
-          // keep these so we can display the correct order code
-          orderCode: doc.orderCode,
-          orderNumber: doc.orderNumber,
+        const list = await productsService.getAll();
+        const mapped: ProductMeta[] = (list as any[]).map((p) => ({
+          id: p.id,
+          name: p.product_name || p.name || p.id,
+          sizes: canonicalizeSizes(p.sizes ?? p.sizeOptions ?? p.size ?? []),
         }));
+        console.debug('[AdminInventory] products loaded', mapped.length);
+        setProducts(mapped);
 
-        // Sort newest first
-        transformedOrders.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
-
-        setOrders(transformedOrders as any);
-      } catch (error) {
-        console.error('Error fetching orders:', error);
-      } finally {
-        setLoading(false);
+        // default to first product
+        if (!selectedProductId && mapped[0]) {
+          setSelectedProductId(mapped[0].id);
+        }
+      } catch (e: any) {
+        console.error('[AdminInventory] load products error', e);
+        setErr(e?.message || 'Failed to load products.');
       }
-    };
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    fetchOrders();
-  }, [currentUser]);
+  // load rows for selected product
+  const loadRows = async (pid: string) => {
+    if (!pid) return;
+    try {
+      setLoading(true);
+      setErr('');
+      console.debug('[AdminInventory] loadRows', { productId: pid });
+      const r = await getByProduct(pid);
+      const mapped: Row[] = r.map((x) => ({
+        productId: x.productId,
+        size: x.size,
+        stock: Number(x.stock || 0),
+        updatedAt: toJsDate(x.updatedAt) || null,
+      }));
+      console.debug('[AdminInventory] rows loaded', mapped.length);
+      setRows(mapped);
+    } catch (e: any) {
+      console.error('[AdminInventory] loadRows error', e);
+      setErr(e?.message || 'Failed to load inventory.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Package className="mx-auto h-12 w-12 text-gray-400" />
-          <h2 className="mt-4 text-xl font-semibold text-gray-900">Please sign in</h2>
-          <p className="mt-2 text-gray-600">You need to be logged in to view your orders</p>
-          <Link to="/login" className="mt-4 inline-block">
-            <Button>Sign In</Button>
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  // when product changes: load rows + preselect first size (if not editing)
+  useEffect(() => {
+    if (!selectedProductId) return;
+    loadRows(selectedProductId).then(() => {
+      if (!editing) {
+        const first = availableSizes[0] ?? '';
+        setForm((f) => ({ ...f, size: first }));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProductId, availableSizes.length]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-      </div>
-    );
-  }
+  const onSave = async () => {
+    if (!selectedProductId) {
+      alert('Please select a product.');
+      return;
+    }
+    if (!form.size.trim()) {
+      alert(
+        availableSizes.length
+          ? 'Please choose a size from the list.'
+          : 'This product has no sizes defined. Add sizes to the product first.'
+      );
+      return;
+    }
+    try {
+      console.debug('[AdminInventory] save', {
+        productId: selectedProductId,
+        size: form.size,
+        qty: Number(form.qty || 0),
+      });
+      await upsert({
+        productId: selectedProductId,
+        size: form.size.trim(),
+        qty: Number(form.qty || 0),
+      });
+      await loadRows(selectedProductId);
+      setForm({ size: availableSizes[0] ?? '', qty: 0 });
+      setEditing(null);
+    } catch (e: any) {
+      console.error('[AdminInventory] save error', e);
+      alert(e?.message || 'Failed to save inventory.');
+    }
+  };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'confirmed':
-        return 'bg-blue-100 text-blue-800';
-      case 'processing':
-        return 'bg-purple-100 text-purple-800';
-      case 'shipped':
-        return 'bg-indigo-100 text-indigo-800';
-      case 'delivered':
-        return 'bg-green-100 text-green-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const onEdit = (size: string, stock: number) => {
+    setEditing({ size });
+    setForm({ size, qty: Number(stock || 0) });
+  };
+
+  const onDelete = async (size: string) => {
+    if (!selectedProductId) return;
+    if (!confirm(`Delete inventory for size "${size}"?`)) return;
+    try {
+      console.debug('[AdminInventory] delete', { productId: selectedProductId, size });
+      await removeInventory(selectedProductId, size);
+      await loadRows(selectedProductId);
+      if (editing?.size === size) {
+        setEditing(null);
+        setForm({ size: availableSizes[0] ?? '', qty: 0 });
+      }
+    } catch (e: any) {
+      console.error('[AdminInventory] delete error', e);
+      alert(e?.message || 'Failed to delete inventory.');
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Your Orders</h1>
+    <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Inventory</h1>
+        <Button variant="outline" onClick={() => selectedProductId && loadRows(selectedProductId)}>
+          <RefreshCcw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
+      </div>
 
-        {orders.length === 0 ? (
-          <div className="text-center py-12">
-            <Package className="mx-auto h-12 w-12 text-gray-400" />
-            <h2 className="mt-4 text-xl font-semibold text-gray-900">No orders yet</h2>
-            <p className="mt-2 text-gray-600">Start shopping to see your orders here</p>
-            <Link to="/products" className="mt-4 inline-block">
-              <Button>Start Shopping</Button>
-            </Link>
+      {err && (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {err}
+        </div>
+      )}
+
+      {/* Product picker */}
+      <div className="bg-white rounded-lg border p-4 mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Product</label>
+        <select
+          value={selectedProductId}
+          onChange={(e) => {
+            setEditing(null);
+            setSelectedProductId(e.target.value);
+          }}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        >
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name || ('Untitled')}
+            </option>
+          ))}
+        </select>
+        {availableSizes.length === 0 && (
+          <p className="mt-2 text-xs text-amber-700 bg-amber-50 inline-block px-2 py-1 rounded">
+            This product has no sizes configured. Add sizes to the product to enable inventory by size.
+          </p>
+        )}
+      </div>
+
+      {/* Add / Edit form */}
+      <div className="bg-white rounded-lg border p-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Size dropdown populated from product */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Size</label>
+            <select
+              value={form.size}
+              onChange={(e) => setForm((f) => ({ ...f, size: e.target.value }))}
+              disabled={editing !== null /* keep id stable while editing */}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100"
+            >
+              {availableSizes.length === 0 ? (
+                <option value="">No sizes</option>
+              ) : (
+                availableSizes.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))
+              )}
+            </select>
+            {editing && (
+              <p className="mt-1 text-xs text-gray-500">
+                Size can’t be changed while editing. Delete and re-add if you need a different size.
+              </p>
+            )}
           </div>
+
+          {/* Quantity */}
+          <Input
+            label="Quantity"
+            type="number"
+            value={String(form.qty)}
+            onChange={(e) => setForm((f) => ({ ...f, qty: Number(e.target.value) }))}
+            required
+          />
+
+          {/* Save */}
+          <div className="flex items-end">
+            <Button
+              onClick={onSave}
+              className="w-full"
+              disabled={availableSizes.length === 0 || !form.size}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {editing ? 'Update' : 'Add'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-lg border p-4">
+        {loading ? (
+          <div className="text-sm text-gray-600">Loading…</div>
+        ) : rows.length === 0 ? (
+          <div className="text-sm text-gray-600">No inventory rows for this product yet.</div>
         ) : (
-          <div className="space-y-6">
-            {orders.map((order: any) => {
-              const displayOrderCode =
-                order.orderCode ?? order.orderNumber ?? order.id;
-
-              return (
-                <div key={order.id} className="bg-white shadow-sm rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900">
-                        Order #{String(displayOrderCode)}
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        Placed on {new Date(order.orderDate).toLocaleDateString()}
-                      </p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b">
+                <th className="py-2 pr-2">Size</th>
+                <th className="py-2 pr-2 text-right">Stock</th>
+                <th className="py-2 pr-2">Updated</th>
+                <th className="py-2 pr-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRows.map((r) => (
+                <tr key={r.size} className="border-b last:border-0">
+                  <td className="py-2 pr-2">{r.size}</td>
+                  <td className="py-2 pr-2 text-right font-medium">{r.stock}</td>
+                  <td className="py-2 pr-2">{r.updatedAt ? r.updatedAt.toLocaleString() : '—'}</td>
+                  <td className="py-2 pr-2 text-right">
+                    <div className="inline-flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => onEdit(r.size, r.stock)}>
+                        <Pencil className="h-4 w-4 mr-1" /> Edit
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => onDelete(r.size)}>
+                        <Trash2 className="h-4 w-4 mr-1" /> Delete
+                      </Button>
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          order.status
-                        )}`}
-                      >
-                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                      </span>
-                      <Link to={`/order-confirmation/${order.id}`}>
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div className="border-t pt-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex -space-x-2">
-                          {order.items.slice(0, 3).map((item: any, index: number) => (
-                            <img
-                              key={index}
-                              className="w-10 h-10 rounded-md object-cover border-2 border-white"
-                              src={
-                                item.image ||
-                                item.product?.images?.[0] ||
-                                (item.product as any)?.image_url ||
-                                FALLBACK
-                              }
-                              alt={item.name || item.product?.name || 'Item'}
-                            />
-                          ))}
-                          {order.items.length > 3 && (
-                            <div className="w-10 h-10 rounded-md bg-gray-100 border-2 border-white flex items-center justify-center">
-                              <span className="text-xs text-gray-600">
-                                +{order.items.length - 3}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {order.items.length} item{order.items.length > 1 ? 's' : ''}
-                          </p>
-                          {order.estimatedDelivery && (
-                            <p className="text-sm text-gray-600">
-                              Expected by {new Date(order.estimatedDelivery).toLocaleDateString()}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-medium text-gray-900">
-                          ₹{Number(order.total || 0).toFixed(2)}
-                        </p>
-                        <p className="text-sm text-gray-600 capitalize">
-                          {order.paymentMethod}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
   );
 };
 
-export default OrdersPage;
+export default AdminInventory;
