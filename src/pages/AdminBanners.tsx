@@ -18,6 +18,10 @@ type Banner = {
   linkUrl?: string;
   title?: string;
   subtitle?: string;
+  mobileTitle?: string;
+  mobileSubtitle?: string;
+  buttonText?: string;
+  desktopTextAlign?: 'left' | 'center' | 'right';
   order: number;
   active: boolean;
 };
@@ -40,6 +44,10 @@ const AdminBanners: React.FC = () => {
           linkUrl: b.linkUrl || '',
           title: b.title || '',
           subtitle: b.subtitle || '',
+          mobileTitle: b.mobileTitle || '',
+          mobileSubtitle: b.mobileSubtitle || '',
+          buttonText: b.buttonText || '',
+          desktopTextAlign: (b.desktopTextAlign as any) || 'left',
           order: Number(b.order ?? 0),
           active: !!b.active,
         }))
@@ -135,6 +143,10 @@ const AdminBanners: React.FC = () => {
       await updateBanner(b.id, {
         title: b.title || '',
         subtitle: b.subtitle || '',
+        mobileTitle: b.mobileTitle || '',
+        mobileSubtitle: b.mobileSubtitle || '',
+        buttonText: b.buttonText || '',
+        desktopTextAlign: b.desktopTextAlign || 'left',
         linkUrl: b.linkUrl || '',
         active: !!b.active,
         order: Number(b.order || 0),
@@ -246,7 +258,9 @@ const AdminBanners: React.FC = () => {
                   value={b.linkUrl || ''}
                   onChange={(e) => saveLocal(b.id, { linkUrl: e.target.value })}
                 />
-
+  <Input label="Mobile Title (optional)" value={b.mobileTitle || ''} onChange={(e) => saveLocal(b.id, { mobileTitle: e.target.value })} />
+  <Input label="Mobile Subtitle (optional)" value={b.mobileSubtitle || ''} onChange={(e) => saveLocal(b.id, { mobileSubtitle: e.target.value })} />
+  <Input label="Button Text" value={b.buttonText || ''} onChange={(e) => saveLocal(b.id, { buttonText: e.target.value })} />
                 <Input
                   label="Mobile Image URL (optional)"
                   value={b.mobileImageUrl || ''}
@@ -264,7 +278,8 @@ const AdminBanners: React.FC = () => {
                   }
                 />
 
-                <label className="text-xs font-medium text-gray-600 mt-6 sm:mt-0">
+                {/* <label className="text-xs font-medium text-gray-600 mt-6 sm:mt-0"> */}
++  <label className="text-xs font-medium text-gray-600 mt-6 sm:mt-0">
                   Active
                   <input
                     type="checkbox"
@@ -273,6 +288,18 @@ const AdminBanners: React.FC = () => {
                     onChange={(e) => saveLocal(b.id, { active: e.target.checked })}
                   />
                 </label>
+  <div className="sm:col-span-1">
+    <label className="block text-xs font-medium text-gray-600 mb-1">Desktop Text Position</label>
+    <select
+      value={b.desktopTextAlign || 'left'}
+      onChange={(e) => saveLocal(b.id, { desktopTextAlign: e.target.value as any })}
+      className="block w-full rounded border px-2 py-2 text-sm"
+    >
+      <option value="left">Left</option>
+      <option value="center">Center</option>
+      <option value="right">Right</option>
+    </select>
+  </div>                
               </div>
 
               <div className="flex items-center gap-2">

@@ -41,6 +41,10 @@ export async function listActiveBanners(now = new Date()) {
       linkUrl: d.linkUrl || d.href || undefined,
       title: d.title ?? d.headline ?? '',
       subtitle: d.subtitle ?? d.subhead ?? '',
+      mobileTitle: d.mobileTitle ?? '',
+      mobileSubtitle: d.mobileSubtitle ?? '',
+      buttonText: d.buttonText ?? '',
+      desktopTextAlign: d.desktopTextAlign ?? 'left',      
       order: Number(d.order ?? 0),
       startAt: start,
       endAt: end,
@@ -65,6 +69,10 @@ export async function listAllBanners() {
       linkUrl: d.linkUrl || d.href || '',
       title: d.title ?? d.headline ?? '',
       subtitle: d.subtitle ?? d.subhead ?? '',
+      mobileTitle: d.mobileTitle ?? '',
+      mobileSubtitle: d.mobileSubtitle ?? '',
+      buttonText: d.buttonText ?? '',
+      desktopTextAlign: d.desktopTextAlign ?? 'left',
       order: Number(d.order ?? 0),
       startAt: d.startAt ?? null,
       endAt: d.endAt ?? null,
@@ -84,6 +92,10 @@ export async function createBanner(input: {
   linkUrl?: string;
   title?: string;
   subtitle?: string;
+  mobileTitle?: string;
+  mobileSubtitle?: string;
+  buttonText?: string;
+  desktopTextAlign?: 'left' | 'center' | 'right';  
   order?: number;
   active?: boolean;
   startAt?: any;
@@ -95,6 +107,10 @@ export async function createBanner(input: {
     linkUrl: input.linkUrl ?? '',
     title: input.title ?? '',
     subtitle: input.subtitle ?? '',
+    mobileTitle: input.mobileTitle ?? '',
+    mobileSubtitle: input.mobileSubtitle ?? '',
+    buttonText: input.buttonText ?? '',
+    desktopTextAlign: input.desktopTextAlign ?? 'left',
     order: Number(input.order ?? 0),
     active: !!input.active,
     startAt: input.startAt ?? null,
@@ -115,6 +131,10 @@ export async function updateBanner(
     linkUrl: string;
     title: string;
     subtitle: string;
+    mobileTitle: string;
+    mobileSubtitle: string;
+    buttonText: string;
+    desktopTextAlign: 'left' | 'center' | 'right';    
     order: number;
     active: boolean;
     startAt: any;
@@ -128,6 +148,10 @@ export async function updateBanner(
     'linkUrl',
     'title',
     'subtitle',
+    'mobileTitle',
+    'mobileSubtitle',
+    'buttonText',
+    'desktopTextAlign',  
     'startAt',
     'endAt',
   ] as const).forEach((k) => {

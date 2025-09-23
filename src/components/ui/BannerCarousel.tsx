@@ -10,6 +10,10 @@ type BannerItem = {
   linkUrl?: string;
   title?: string;
   subtitle?: string;
+  mobileTitle?: string;
+  mobileSubtitle?: string;
+  buttonText?: string;
+  desktopTextAlign?: 'left' | 'center' | 'right';
 };
 
 const BannerCarousel: React.FC<{ items: BannerItem[]; autoMs?: number }> = ({
@@ -19,7 +23,14 @@ const BannerCarousel: React.FC<{ items: BannerItem[]; autoMs?: number }> = ({
   const [idx, setIdx] = useState(0);
   const safeItems = useMemo(() => items.filter(Boolean), [items]);
   const curr = safeItems[idx];
-
+  const btnText = curr.buttonText || 'Shop';
+  const dest = curr.linkUrl || '/products';
+  const align = curr.desktopTextAlign || 'left';
+  const justify =
+    align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start';
+  const textAlign =
+    align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+    
   useEffect(() => {
     if (safeItems.length <= 1) return;
     const t = setInterval(() => setIdx((i) => (i + 1) % safeItems.length), autoMs);
@@ -42,15 +53,19 @@ const BannerCarousel: React.FC<{ items: BannerItem[]; autoMs?: number }> = ({
         <img
           src={curr.mobileImageUrl || curr.imageUrl}
           alt={curr.title || 'Banner'}
-          className="block sm:hidden absolute inset-0 w-full h-full object-cover object-center"
+          className="block sm:hidden absolute inset-0 w-full h-full object-cover object-center "
         />
 
         {/* 40/60 overlay grid (desktop/tablet) */}
-        <div className="hidden sm:grid absolute inset-0 grid-cols-5">
+        {/* <div className="hidden sm:grid absolute inset-0 grid-cols-5"> */}
           {/* Left 40%: center the text box */}
-          <div className="col-span-2 flex items-center justify-center px-4">
+          {/* <div className="col-span-2 flex items-center justify-center px-4">
             {(curr.title || curr.subtitle) && (
-              <div className="max-w-[90%] text-left">
+              <div className="max-w-[90%] text-left"> */}
+        {/* Desktop overlay: position left/center/right */}
+        <div className={`hidden sm:flex absolute inset-0 items-center ${justify} px-4 md:px-8`}>
+          {(curr.title || curr.subtitle) && (
+            <div className={`max-w-[40ch] ${textAlign}`}>
                 {curr.title && (
                   <h2 className="text-[#8e3b7f] text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight drop-shadow">
                     {curr.title}
@@ -61,31 +76,41 @@ const BannerCarousel: React.FC<{ items: BannerItem[]; autoMs?: number }> = ({
                     {curr.subtitle}
                   </p>
                 )}
-                <Link to="/products">
-                  <Button className="mt-5">Shop</Button>
+                {/* <Link to="/products">
+                  <Button className="mt-5">Shop</Button> */}
+                <Link to={dest}>
+                  <Button className="mt-5">{btnText}</Button>                  
                 </Link>
-              </div>
+              {/* </div>
             )}
-          </div>
+          </div> */}
           {/* Right 60%: intentionally empty to let the image show */}
-          <div className="col-span-3" />
-        </div>
-
+          {/* <div className="col-span-3" />
+        </div> */}
+          </div>
+        )}
+      </div>
         {/* Mobile overlay: centered title, subtitle, and button */}
         <div className="sm:hidden absolute inset-0 flex items-center justify-center px-5 text-center">
           <div className="max-w-xs">
-            {curr.title && (
+            {/* {curr.title && ( */}
+            {(curr.mobileTitle || curr.title) && (
               <h2 className="text-[#8e3b7f] text-2xl font-extrabold leading-tight drop-shadow">
-                {curr.title}
+                {/* {curr.title} */}
+                {curr.mobileTitle || curr.title}
               </h2>
             )}
-            {curr.subtitle && (
+            {/* {curr.subtitle && ( */}
+             {(curr.mobileSubtitle || curr.subtitle) && (
               <p className="mt-3 text-[#d25c4d]/95 text-lg md:text-xl lg:text-2xl font-semibold drop-shadow">
-                {curr.subtitle}
+                {/* {curr.subtitle} */}
+                {curr.mobileSubtitle || curr.subtitle}
               </p>
             )}
-            <Link to="/products">
-              <Button className="mt-4">Shop</Button>
+            {/* <Link to="/products">
+              <Button className="mt-4">Shop</Button> */}
+            <Link to={dest}>
+              <Button className="mt-4">{btnText}</Button>
             </Link>
           </div>
         </div>
