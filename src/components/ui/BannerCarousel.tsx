@@ -16,105 +16,173 @@ type BannerItem = {
   desktopTextAlign?: 'left' | 'center' | 'right';
 };
 
+const FALLBACK =
+  'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg';
+
 const BannerCarousel: React.FC<{ items: BannerItem[]; autoMs?: number }> = ({
   items,
   autoMs = 6000,
 }) => {
   const [idx, setIdx] = useState(0);
+
+  // image load states (desktop & mobile handled separately so skeletons don't cross-trigger)
+  const [loadedDesk, setLoadedDesk] = useState(false);
+  const [errorDesk, setErrorDesk] = useState(false);
+  const [loadedMob, setLoadedMob] = useState(false);
+  const [errorMob, setErrorMob] = useState(false);
+
   const safeItems = useMemo(() => items.filter(Boolean), [items]);
   const curr = safeItems[idx];
-  const btnText = curr.buttonText || 'Shop';
-  const dest = curr.linkUrl || '/products';
-  const align = curr.desktopTextAlign || 'left';
+
+  const btnText = curr?.buttonText || 'Shop';
+  const dest = curr?.linkUrl || '/products';
+  const align = curr?.desktopTextAlign || 'left';
   const justify =
-    align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start';
+    align === 'center'
+      ? 'justify-center'
+      : align === 'right'
+      ? 'justify-end'
+      : 'justify-start';
   const textAlign =
-    align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
-    
+    align === 'center'
+      ? 'text-center'
+      : align === 'right'
+      ? 'text-right'
+      : 'text-left';
+// helper to add fetchpriority only on the first slide and avoid TS typing issues
+const hiPrio = idx === 0 ? { fetchpriority: 'high' as any } : {};
+  // auto-advance
   useEffect(() => {
     if (safeItems.length <= 1) return;
     const t = setInterval(() => setIdx((i) => (i + 1) % safeItems.length), autoMs);
     return () => clearInterval(t);
   }, [safeItems.length, autoMs]);
 
-  if (safeItems.length === 0) return null;
+  // reset load state on slide change
+  useEffect(() => {
+    setLoadedDesk(false);
+    setErrorDesk(false);
+    setLoadedMob(false);
+    setErrorMob(false);
+
+    // (optional) preload next image for smoother transitions
+    const next = safeItems[(idx + 1) % safeItems.length];
+    if (next?.imageUrl) {
+      const pre = new Image();
+      pre.src = next.imageUrl;
+    }
+    if (next?.mobileImageUrl) {
+      const preM = new Image();
+      preM.src = next.mobileImageUrl;
+    }
+  }, [idx, safeItems]);
+
+  if (safeItems.length === 0 || !curr) return null;
 
   return (
     <div className="relative">
-      {/* Full-bleed image */}
       <div className="relative h-[38vh] sm:h-[46vh] md:h-[60vh] lg:h-[72vh] overflow-hidden">
-        {/* desktop/tablet */}
-        <img
-          src={curr.imageUrl}
-          alt={curr.title || 'Banner'}
-          className="hidden sm:block absolute inset-0 w-full h-full object-cover object-top"
-        />
-        {/* mobile (crop left; show right side) */}
-        <img
-          src={curr.mobileImageUrl || curr.imageUrl}
-          alt={curr.title || 'Banner'}
-          className="block sm:hidden absolute inset-0 w-full h-full object-cover object-center "
-        />
+        {/* Desktop / Tablet image */}
+        {!errorDesk && (
+          <img
+            {...hiPrio}
+            loading={idx === 0 ? 'eager' : 'lazy'}
+            decoding="async"
+            src={curr.imageUrl}
+            alt={curr.title || 'Banner'}
+            className={`hidden sm:block absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-300 ${
+              loadedDesk ? 'opacity-100' : 'opacity-0'
+            }`}
+            onLoad={() => setLoadedDesk(true)}
+            onError={() => setErrorDesk(true)}
+            // loading="eager"
+            fetchPriority="high"
+            // decoding="async"
+          />
+        )}
+        {/* Desktop fallback only if the main image fails */}
+        {errorDesk && (
+          <img
+            src={FALLBACK}
+            alt="Banner"
+            className="hidden sm:block absolute inset-0 w-full h-full object-cover object-top"
+          />
+        )}
+        {/* Desktop skeleton while loading */}
+        {!loadedDesk && !errorDesk && (
+          <div className="hidden sm:block absolute inset-0 bg-gray-100 animate-pulse" />
+        )}
 
-        {/* 40/60 overlay grid (desktop/tablet) */}
-        {/* <div className="hidden sm:grid absolute inset-0 grid-cols-5"> */}
-          {/* Left 40%: center the text box */}
-          {/* <div className="col-span-2 flex items-center justify-center px-4">
-            {(curr.title || curr.subtitle) && (
-              <div className="max-w-[90%] text-left"> */}
-        {/* Desktop overlay: position left/center/right */}
+        {/* Mobile image */}
+        {!errorMob && (
+          <img  
+            {...hiPrio}
+            loading={idx === 0 ? 'eager' : 'lazy'}
+            decoding="async"
+            src={curr.mobileImageUrl || curr.imageUrl}
+            alt={curr.title || 'Banner'}
+            className={`block sm:hidden absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-300 ${
+              loadedMob ? 'opacity-100' : 'opacity-0'
+            }`}
+            onLoad={() => setLoadedMob(true)}
+            onError={() => setErrorMob(true)}
+            // loading="eager"
+            fetchPriority="high"
+            // decoding="async"
+          />
+        )}
+        {/* Mobile fallback only if the main image fails */}
+        {errorMob && (
+          <img
+            src={FALLBACK}
+            alt="Banner"
+            className="block sm:hidden absolute inset-0 w-full h-full object-cover object-center"
+          />
+        )}
+        {/* Mobile skeleton while loading */}
+        {!loadedMob && !errorMob && (
+          <div className="block sm:hidden absolute inset-0 bg-gray-100 animate-pulse" />
+        )}
+
+        {/* Desktop overlay: left/center/right positioning */}
         <div className={`hidden sm:flex absolute inset-0 items-center ${justify} px-4 md:px-8`}>
           {(curr.title || curr.subtitle) && (
             <div className={`max-w-[40ch] ${textAlign}`}>
-                {curr.title && (
-                  <h2 className="text-[#8e3b7f] text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight drop-shadow">
-                    {curr.title}
-                  </h2>
-                )}
-                {curr.subtitle && (
-                  <p className="mt-3 text-[#d25c4d]/95 text-lg md:text-xl lg:text-2xl font-semibold drop-shadow">
-                    {curr.subtitle}
-                  </p>
-                )}
-                {/* <Link to="/products">
-                  <Button className="mt-5">Shop</Button> */}
-                <Link to={dest}>
-                  <Button className="mt-5">{btnText}</Button>                  
-                </Link>
-              {/* </div>
-            )}
-          </div> */}
-          {/* Right 60%: intentionally empty to let the image show */}
-          {/* <div className="col-span-3" />
-        </div> */}
-          </div>
-        )}
-      </div>
-        {/* Mobile overlay: centered title, subtitle, and button */}
+              {curr.title && (
+                <h2 className="text-[#8e3b7f] text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight drop-shadow">
+                  {curr.title}
+                </h2>
+              )}
+              {curr.subtitle && (
+                <p className="mt-3 text-[#d25c4d]/95 text-lg md:text-xl lg:text-2xl font-semibold drop-shadow">
+                  {curr.subtitle}
+                </p>
+              )}
+              <Link to={dest}>
+                <Button className="mt-5">{btnText}</Button>
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile overlay: centered title/subtitle/button (uses mobile* if provided) */}
         <div className="sm:hidden absolute inset-0 flex items-center justify-center px-5 text-center">
           <div className="max-w-xs">
-            {/* {curr.title && ( */}
             {(curr.mobileTitle || curr.title) && (
               <h2 className="text-[#8e3b7f] text-2xl font-extrabold leading-tight drop-shadow">
-                {/* {curr.title} */}
                 {curr.mobileTitle || curr.title}
               </h2>
             )}
-            {/* {curr.subtitle && ( */}
-             {(curr.mobileSubtitle || curr.subtitle) && (
-              <p className="mt-3 text-[#d25c4d]/95 text-lg md:text-xl lg:text-2xl font-semibold drop-shadow">
-                {/* {curr.subtitle} */}
+            {(curr.mobileSubtitle || curr.subtitle) && (
+              <p className="mt-3 text-[#d25c4d]/95 text-lg font-semibold drop-shadow">
                 {curr.mobileSubtitle || curr.subtitle}
               </p>
             )}
-            {/* <Link to="/products">
-              <Button className="mt-4">Shop</Button> */}
             <Link to={dest}>
               <Button className="mt-4">{btnText}</Button>
             </Link>
           </div>
         </div>
-
       </div>
 
       {/* Dots */}
